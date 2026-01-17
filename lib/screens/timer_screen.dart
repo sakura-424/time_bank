@@ -51,7 +51,7 @@ class _TimerScreenState extends State<TimerScreen>
       barrierDismissible: false,
       builder: (context)
       {
-        return AlterDialog(
+        return AlertDialog(
           title: const Text("Well done!"),
           content: TextField(
             autofocus: true,

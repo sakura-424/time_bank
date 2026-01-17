@@ -1,18 +1,16 @@
 import 'dart:convert';
 
-import 'package:my_first_app/main.dart';
-
-class HistoryItemo
+class HistoryItem
 {
   final DateTime date;
   final int durationSeconds;
   final String memo;
 
-  HistoryItem({rquired this.date, required this.durationSeconds, required this.memo});
+  HistoryItem({required this.date, required this.durationSeconds, required this.memo});
 
   Map<String, dynamic> toJson() =>
   {
-    'date': date.toIso869String(),
+    'date': date.toIso8601String(),
     'durationSeconds': durationSeconds,
     'memo': memo,
   };
