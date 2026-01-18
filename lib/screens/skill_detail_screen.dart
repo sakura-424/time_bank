@@ -9,6 +9,10 @@ import '../utils/app_utils.dart';
 import '../services/skill_service.dart';
 import 'timer_screen.dart';
 
+import '../widgets/tag_management_dialog.dart';
+import '../widgets/edit_memo_dialog.dart';
+import '../widgets/history_detail_dialog.dart';
+
 class SkillDetailScreen extends StatefulWidget {
   final Skill skill;
   const SkillDetailScreen({super.key, required this.skill});
@@ -28,7 +32,6 @@ class _SkillDetailScreenState extends State<SkillDetailScreen> {
     _refreshAllData();
   }
 
-  // 画面全体のデータを再読み込み
   Future<void> _refreshAllData() async {
     final tags = await SkillService.loadTags(widget.skill.name);
     final history = await SkillService.loadHistory(widget.skill.name);
@@ -41,56 +44,110 @@ class _SkillDetailScreenState extends State<SkillDetailScreen> {
     });
   }
 
-  // タイマー終了後の保存処理
   Future<void> _handleSaveSession(int durationSeconds, String memo, String tag) async {
-    // 1. 合計時間などの保存
     await SkillService.saveSession(widget.skill, durationSeconds);
-
-    // 2. 履歴リストへの追加と保存
     final newItem = HistoryItem(
       date: DateTime.now(),
       durationSeconds: durationSeconds,
       memo: memo,
       tag: tag
     );
-    // リストの先頭に追加して保存
     historyList.insert(0, newItem);
     await SkillService.saveHistory(widget.skill.name, historyList);
-
-    // 3. 画面更新
     _refreshAllData();
   }
 
-  // メモ更新処理
-  Future<void> _handleUpdateMemo(int index, String newMemo) async {
-    setState(() {
-      final oldItem = historyList[index];
-      historyList[index] = HistoryItem(
-        date: oldItem.date,
-        durationSeconds: oldItem.durationSeconds,
-        memo: newMemo,
-        tag: oldItem.tag,
-      );
-    });
-    await SkillService.saveHistory(widget.skill.name, historyList);
+  Future<void> _handleDeleteSession(HistoryItem item) async {
+    await SkillService.deleteSession(widget.skill, item, historyList);
+    _refreshAllData();
   }
 
-  // タグ追加削除処理
-  Future<void> _handleAddTag(String newTag) async {
-    setState(() {
-      myTags.add(newTag);
-    });
-    await SkillService.saveTags(widget.skill.name, myTags);
+  // --- UI表示ロジック ---
+
+  // タグ管理ダイアログを表示
+  void _openTagManager() {
+    showDialog(
+      context: context,
+      builder: (context) => TagManagementDialog(
+        tags: myTags,
+        onAdd: (newTag) async {
+          setState(() => myTags.add(newTag));
+          await SkillService.saveTags(widget.skill.name, myTags);
+        },
+        onRemove: (index) async {
+          setState(() => myTags.removeAt(index));
+          await SkillService.saveTags(widget.skill.name, myTags);
+        },
+      ),
+    );
   }
 
-  Future<void> _handleRemoveTag(int index) async {
-    setState(() {
-      myTags.removeAt(index);
-    });
-    await SkillService.saveTags(widget.skill.name, myTags);
+  // 詳細ダイアログを表示（そこから編集へも飛べる）
+  void _openDetailDialog(int index) {
+    showDialog(
+      context: context,
+      builder: (context) => HistoryDetailDialog(
+        item: historyList[index],
+        onEdit: () {
+          // 詳細を閉じた後に編集ダイアログを開く
+          _openEditDialog(index);
+        },
+        onDelete: () {
+          _confirmDelete(index);
+        },
+      ),
+    );
   }
 
-  // 円グラフのデータ生成
+  void _confirmDelete(int index) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text("Delete History"),
+          content: const Text("Are you sure you want to delete this record? Time will be subtraced."),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Cancel"),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              onPressed: () {
+                Navigator.pop(context);
+                _handleDeleteSession(historyList[index]);
+              },
+              child: const Text("Delete", style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // 編集ダイアログを表示
+  void _openEditDialog(int index) {
+    showDialog(
+      context: context,
+      builder: (context) => EditMemoDialog(
+        currentMemo: historyList[index].memo,
+        onSave: (newMemo) async {
+          setState(() {
+            final oldItem = historyList[index];
+            historyList[index] = HistoryItem(
+              date: oldItem.date,
+              durationSeconds: oldItem.durationSeconds,
+              memo: newMemo,
+              tag: oldItem.tag,
+            );
+          });
+          await SkillService.saveHistory(widget.skill.name, historyList);
+        },
+      ),
+    );
+  }
+
+  // 円グラフデータ生成
   List<PieChartSectionData> _getPieChartSections() {
     Map<String, int> tagTotals = {};
     int total = 0;
@@ -98,16 +155,12 @@ class _SkillDetailScreenState extends State<SkillDetailScreen> {
       tagTotals[item.tag] = (tagTotals[item.tag] ?? 0) + item.durationSeconds;
       total += item.durationSeconds;
     }
-
     if (total == 0) return [];
-
     return tagTotals.entries.map((entry) {
       final percentage = (entry.value / total) * 100;
       final isLarge = percentage > 10;
-      final color = AppUtils.getTagColor(entry.key); // Utilsを使用
-
       return PieChartSectionData(
-        color: color,
+        color: AppUtils.getTagColor(entry.key),
         value: entry.value.toDouble(),
         title: isLarge ? '${percentage.toStringAsFixed(0)}%' : '',
         radius: 50,
@@ -116,144 +169,17 @@ class _SkillDetailScreenState extends State<SkillDetailScreen> {
     }).toList();
   }
 
-  // --- ダイアログ表示系 ---
-
-  void _showTagManageDialog() {
-    TextEditingController tagController = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              title: const Text("Manage Tags"),
-              content: SizedBox(
-                width: double.maxFinite,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Row(children: [
-                        Expanded(child: TextField(controller: tagController, decoration: const InputDecoration(hintText: "New Tag Name"))),
-                        IconButton(
-                          icon: const Icon(Icons.add_circle, color: Colors.black),
-                          onPressed: () {
-                            if (tagController.text.isNotEmpty) {
-                              _handleAddTag(tagController.text); // ロジック呼び出し
-                              setDialogState(() => tagController.clear());
-                            }
-                          },
-                        ),
-                    ]),
-                    const SizedBox(height: 20),
-                    Flexible(
-                      child: ListView.builder(
-                        shrinkWrap: true,
-                        itemCount: myTags.length,
-                        itemBuilder: (context, index) {
-                          final tag = myTags[index];
-                          return ListTile(
-                            leading: Icon(Icons.label, color: AppUtils.getTagColor(tag)),
-                            title: Text(tag),
-                            trailing: IconButton(
-                              icon: const Icon(Icons.delete, color: Colors.grey),
-                              onPressed: () {
-                                _handleRemoveTag(index); // ロジック呼び出し
-                                setDialogState(() {});
-                              },
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text("Close"))],
-            );
-          },
-        );
-      }
-    );
-  }
-
-  void _showEditDialog(int index) {
-    final controller = TextEditingController(text: historyList[index].memo);
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text("Edit Memo"),
-          content: TextField(controller: controller, autofocus: true, decoration: const InputDecoration(hintText: "Enter memo")),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.black),
-              onPressed: () {
-                _handleUpdateMemo(index, controller.text); // ロジック呼び出し
-                Navigator.pop(context);
-                Navigator.pop(context);
-              },
-              child: const Text("Save", style: TextStyle(color: Colors.white)),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  void _showDetailDialog(int index) {
-    final item = historyList[index];
-    final color = AppUtils.getTagColor(item.tag);
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text(DateFormat('yyyy/MM/dd HH:mm').format(item.date), style: const TextStyle(fontSize: 18)),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(color: color.withOpacity(0.2), borderRadius: BorderRadius.circular(4)),
-                child: Text(item.tag, style: TextStyle(color: color, fontWeight: FontWeight.bold)),
-              ),
-              const SizedBox(height: 10),
-              Row(children: [
-                  const Icon(Icons.timer, color: Colors.grey, size: 20),
-                  const SizedBox(width: 8),
-                  Text(AppUtils.formatHistoryDuration(item.durationSeconds), style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-              ]),
-              const SizedBox(height: 20),
-              const Text("Memo:", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
-              const SizedBox(height: 8),
-              Text(item.memo.isEmpty ? "No memo" : item.memo, style: const TextStyle(fontSize: 16)),
-            ],
-          ),
-          actions: [
-            TextButton.icon(
-              onPressed: () => _showEditDialog(index),
-              icon: const Icon(Icons.edit, size: 18),
-              label: const Text("Edit"),
-              style: TextButton.styleFrom(foregroundColor: Colors.grey),
-            ),
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text("Close")),
-          ],
-        );
-      },
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final pieSections = _getPieChartSections();
+
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Colors.white,
         iconTheme: const IconThemeData(color: Colors.black),
         title: Text(widget.skill.name, style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
         actions: [
-          IconButton(icon: const Icon(Icons.settings), onPressed: _showTagManageDialog),
+          IconButton(icon: const Icon(Icons.settings), onPressed: _openTagManager), // 切り出した関数を呼ぶ
         ],
       ),
       body: SingleChildScrollView(
@@ -286,7 +212,7 @@ class _SkillDetailScreenState extends State<SkillDetailScreen> {
               onClick: (value) {
                 if (value != null) {
                   final dailyMinutes = heatmapDataset[value] ?? 0;
-                  final weeklyMinutes = SkillService.getWeeklyTotal(value, heatmapDataset); // Serviceを使用
+                  final weeklyMinutes = SkillService.getWeeklyTotal(value, heatmapDataset);
                   ScaffoldMessenger.of(context).hideCurrentSnackBar();
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
@@ -311,7 +237,7 @@ class _SkillDetailScreenState extends State<SkillDetailScreen> {
                 itemBuilder: (context, index) {
                   final item = historyList[index];
                   return ListTile(
-                    leading: Icon(Icons.check_circle, color: AppUtils.getTagColor(item.tag)), // Utilsを使用
+                    leading: Icon(Icons.check_circle, color: AppUtils.getTagColor(item.tag)),
                     title: Text(DateFormat('yyyy/MM/dd HH:mm').format(item.date), style: const TextStyle(fontWeight: FontWeight.w500)),
                     subtitle: Row(children: [
                         Container(
@@ -323,7 +249,7 @@ class _SkillDetailScreenState extends State<SkillDetailScreen> {
                         if (item.memo.isNotEmpty) Expanded(child: Text(item.memo, maxLines: 1, overflow: TextOverflow.ellipsis)),
                     ]),
                     trailing: Text(AppUtils.formatHistoryDuration(item.durationSeconds), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                    onTap: () => _showDetailDialog(index),
+                    onTap: () => _openDetailDialog(index),
                   );
                 },
               ),

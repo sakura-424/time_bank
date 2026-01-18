@@ -89,4 +89,29 @@ class SkillService {
     }
     return totalMinutes;
   }
+
+  // 履歴作所と時間の巻き戻し
+  static Future<void> deleteSession(Skill skill, HistoryItem item, List<HistoryItem> currentList) async {
+    final prefs = await SharedPreferences.getInstance();
+
+    // リストから削除
+    currentList.remove(item);
+    List<String> jsonList = currentList.map((i) => jsonEncode(i.toJson())).toList();
+    await prefs.setStringList('${skill.name}_history', jsonList);
+
+    // 合計時間からマイナスして保存
+    skill.totalTime -= Duration(seconds: item.durationSeconds);
+    if (skill.totalTime.isNegative) {
+      skill.totalTime = Duration.zero;
+    }
+    await prefs.setInt(skill.name, skill.totalTime.inSeconds);
+
+    // カレンダーからマイナスして保存
+    String dateKey = "${skill.name}_${DateFormat('yyyyMMdd').format(item.date)}";
+    int currentDaySeconds = prefs.getInt(dateKey) ?? 0;
+    int newDaySeconds = currentDaySeconds - item.durationSeconds;
+
+    if (newDaySeconds < 0) newDaySeconds = 0;
+    await prefs.setInt(dateKey, newDaySeconds);
+  }
 }
