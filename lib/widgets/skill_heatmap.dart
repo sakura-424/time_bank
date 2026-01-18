@@ -69,7 +69,7 @@ class _SkillHeatMapState extends State<SkillHeatMap> {
             datasets: widget.datasets,
             colorsets: const { 1: Colors.teal },
             onClick: (value) {
-              if (value != null) _triggerTooltip(value);
+              _triggerTooltip(value);
             },
           ),
           if (_showTooltip)
