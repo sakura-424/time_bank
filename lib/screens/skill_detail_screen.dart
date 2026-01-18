@@ -153,7 +153,7 @@ class _SkillDetailScreenState extends State<SkillDetailScreen> {
     );
   }
 
-  // ★追加: 一括削除確認ダイアログ
+  // 一括削除確認ダイアログ
   void _confirmBulkDelete() {
     showDialog(
       context: context,
@@ -190,6 +190,22 @@ class _SkillDetailScreenState extends State<SkillDetailScreen> {
     });
   }
 
+  // 全選択・全解除の切り替えロジック
+  void _toggleSelectAll() {
+    setState(() {
+      if (_selectedItems.length == historyList.length) {
+        // すでに全選択されていたら -> 全解除
+        _selectedItems.clear();
+      } else {
+        // それ以外なら -> 全選択
+        _selectedItems.clear(); // 重複防止のため一旦クリア
+        _selectedItems.addAll(historyList); // リストの中身を全部セットに追加
+      }
+    });
+  }
+
+
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -209,6 +225,19 @@ class _SkillDetailScreenState extends State<SkillDetailScreen> {
               ),
               title: Text("${_selectedItems.length} selected", style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
               actions: [
+                // 全選択ボタン
+                IconButton(
+                  // 全選択状態なら「選択解除アイコン」、そうでなければ「全選択アイコン」
+                  icon: Icon(
+                    _selectedItems.length == historyList.length && historyList.isNotEmpty
+                        ? Icons.deselect_outlined // 全解除っぽいアイコン
+                        : Icons.select_all,       // 全選択アイコン
+                  ),
+                  tooltip: _selectedItems.length == historyList.length
+                      ? "Deselect All"
+                      : "Select All",
+                  onPressed: _toggleSelectAll,
+                ),
                 IconButton(
                   icon: const Icon(Icons.delete, color: Colors.red),
                   onPressed: _selectedItems.isEmpty ? null : _confirmBulkDelete,
@@ -220,10 +249,42 @@ class _SkillDetailScreenState extends State<SkillDetailScreen> {
               iconTheme: const IconThemeData(color: Colors.black),
               title: Text(widget.skill.name, style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
               actions: [
-                IconButton(icon: const Icon(Icons.settings), onPressed: _openTagManager),
+                // ★ここを変更: 設定アイコン1つではなく、メニューボタン(PopupMenuButton)にする
+                PopupMenuButton<String>(
+                  onSelected: (value) {
+                    if (value == 'tags') {
+                      _openTagManager();
+                    } else if (value == 'select') {
+                      // メニューから選択モードを開始できる
+                      setState(() {
+                        _isSelectionMode = true;
+                      });
+                    }
+                  },
+                  itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+                    // タグ管理メニュー
+                    const PopupMenuItem<String>(
+                      value: 'tags',
+                      child: ListTile(
+                        leading: Icon(Icons.label),
+                        title: Text('Manage Tags'),
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                    ),
+                    const PopupMenuDivider(),
+                    // 履歴選択メニュー（ここから一括削除へ）
+                    const PopupMenuItem<String>(
+                      value: 'select',
+                      child: ListTile(
+                        leading: Icon(Icons.checklist), // チェックリストのアイコン
+                        title: Text('Select History'),
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                    ),
+                  ],
+                ),
               ],
             ),
-
       body: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -316,7 +377,7 @@ class _SkillDetailScreenState extends State<SkillDetailScreen> {
           ],
         ),
       ),
-      // ★選択モード中は「Start Timer」ボタンを隠す（削除の邪魔になるため）
+      // ★選択モード中は「Start Timer」ボタンを隠す
       floatingActionButton: _isSelectionMode
         ? null
         : FloatingActionButton.extended(
