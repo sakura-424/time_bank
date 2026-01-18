@@ -3,7 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 
 import '../models/skill.dart';
-import '../models/history_time.dart'; // ※ファイル名が history_time.dart の場合はそちらに合わせてください
+import '../models/history_time.dart';
 
 class SkillService {
 
