@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_heatmap_calendar/flutter_heatmap_calendar.dart';
 import 'package:intl/intl.dart';
+import 'package:fl_chart/fl_chart.dart';
 
 import '../models/skill.dart';
 import '../models/history_time.dart';
@@ -19,11 +20,28 @@ class SkillDetailScreen extends StatefulWidget {
 class _SkillDetailScreenState extends State<SkillDetailScreen> {
   Map<DateTime, int> heatmapDataset = {};
   List<HistoryItem> historyList = [];
+  List<String> myTags = [];
 
   @override
   void initState() {
     super.initState();
     _loadData();
+    _loadTags();
+  }
+
+  Future<void> _loadTags() async {
+    final prefs = await SharedPreferences.getInstance();
+    List<String>? savedTags = prefs.getStringList('tags_${widget.skill.name}');
+
+    if (savedTags != null && savedTags.isNotEmpty) {
+      setState(() {
+        myTags = savedTags;
+      });
+    } else {
+      setState(() {
+        myTags = ["General"];
+      });
+    }
   }
 
   Future<void> _loadData() async {
@@ -54,7 +72,12 @@ class _SkillDetailScreenState extends State<SkillDetailScreen> {
     });
   }
 
-  Future<void> _saveSession(int durationSeconds, String memo) async {
+  Future<void> _saveTags() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList('tags_${widget.skill.name}', myTags);
+  }
+
+  Future<void> _saveSession(int durationSeconds, String memo, String tag) async {
     final prefs = await SharedPreferences.getInstance();
     DateTime now = DateTime.now();
 
@@ -65,7 +88,7 @@ class _SkillDetailScreenState extends State<SkillDetailScreen> {
     int todaySeconds = prefs.getInt(dateKey) ?? 0;
     await prefs.setInt(dateKey, todaySeconds + durationSeconds);
 
-    final newItem = HistoryItem(date: now, durationSeconds: durationSeconds, memo: memo);
+    final newItem = HistoryItem(date: now, durationSeconds: durationSeconds, memo: memo, tag: tag);
     historyList.insert(0, newItem);
 
     await _saveHistoryToPrefs();
@@ -85,14 +108,23 @@ class _SkillDetailScreenState extends State<SkillDetailScreen> {
         date: oldItem.date,
         durationSeconds: oldItem.durationSeconds,
         memo: newMemo,
+        tag: oldItem.tag,
       );
     });
     _saveHistoryToPrefs();
   }
 
+  Color _getTagColor(String tag) {
+    final List<Color> palette = [
+      Colors.blue, Colors.red, Colors.green, Colors.orange,
+      Colors.purple, Colors.teal, Colors.pink, Colors.indigo,
+      Colors.brown, Colors.cyan,
+    ];
+    return palette[tag.hashCode.abs() % palette.length];
+  }
+
   String _formatMinutes(int minutes) {
-    if (minutes == 0)
-      return "0m";
+    if (minutes == 0) return "0m";
     int h = minutes ~/ 60;
     int m = minutes % 60;
     if (h > 0){
@@ -123,6 +155,85 @@ class _SkillDetailScreenState extends State<SkillDetailScreen> {
       return "${d.inHours}h ${d.inMinutes.remainder(60)}m";
     }
     return "${d.inMinutes}m ${d.inSeconds.remainder(60)}s";
+  }
+
+  void _showTagManageDialog() {
+    TextEditingController tagController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text("Manage Tags"),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: tagController,
+                            decoration: const InputDecoration(hintText: "New Tag Name"),
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.add_circle, color: Colors.black),
+                          onPressed: () {
+                            if (tagController.text.isNotEmpty) {
+                              setState(() {
+                                myTags.add(tagController.text);
+                                _saveTags();
+                              });
+                              setDialogState(() {
+                                tagController.clear();
+                              });
+                            }
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    Flexible(
+                      child: ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: myTags.length,
+                        itemBuilder: (context, index) {
+                          final tag = myTags[index];
+                          return ListTile(
+                            leading: Icon(Icons.label, color: _getTagColor(tag)),
+                            title: Text(tag),
+                            trailing: IconButton(
+                              icon: const Icon(Icons.delete, color: Colors.grey),
+                              onPressed: () {
+                                setState(() {
+                                  myTags.removeAt(index);
+                                  _saveTags();
+                                });
+                                setDialogState(() {});
+                              },
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text("Close"),
+                ),
+              ],
+            );
+          },
+        );
+      }
+    );
   }
 
   void _showEditDialog(int index) {
@@ -168,6 +279,16 @@ class _SkillDetailScreenState extends State<SkillDetailScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // タグ表示を追加
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: _getTagColor(item.tag).withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(item.tag, style: TextStyle(color: _getTagColor(item.tag), fontWeight: FontWeight.bold)),
+              ),
+              const SizedBox(height: 10),
               Row(
                 children: [
                   const Icon(Icons.timer, color: Colors.grey, size: 20),
@@ -206,10 +327,45 @@ class _SkillDetailScreenState extends State<SkillDetailScreen> {
     );
   }
 
+  List<PieChartSectionData> _getPieChartSections() {
+    Map<String, int> tagTotals = {};
+    int total = 0;
+    for (var item in historyList) {
+      tagTotals[item.tag] = (tagTotals[item.tag] ?? 0) + item.durationSeconds;
+      total += item.durationSeconds;
+    }
+
+    if (total == 0) return [];
+
+    return tagTotals.entries.map((entry) {
+      final percentage = (entry.value / total) * 100;
+      final isLarge = percentage > 10;
+
+      return PieChartSectionData(
+        color: _getTagColor(entry.key),
+        value: entry.value.toDouble(),
+        title: isLarge ? '${percentage.toStringAsFixed(0)}%' : '',
+        radius: 50,
+        titleStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
+      );
+    }).toList();
+  }
+
   @override
   Widget build(BuildContext context) {
+    final pieSections = _getPieChartSections();
     return Scaffold(
-      appBar: AppBar(title: Text(widget.skill.name)),
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        iconTheme: const IconThemeData(color: Colors.black),
+        title: Text(widget.skill.name, style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings),
+            onPressed: _showTagManageDialog,
+          ),
+        ],
+      ),
       body: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -221,6 +377,30 @@ class _SkillDetailScreenState extends State<SkillDetailScreen> {
                 style: const TextStyle(fontSize: 40, fontWeight: FontWeight.bold),
               ),
             ),
+
+            if (pieSections.isNotEmpty) ...[
+              const SizedBox(height: 30),
+              SizedBox(
+                height: 200,
+                child: PieChart(
+                  PieChartData(
+                    sections: pieSections,
+                    centerSpaceRadius: 40,
+                    sectionsSpace: 2,
+                  ),
+                ),
+              ),
+              Center(
+                child: Wrap(
+                  spacing: 10,
+                  children: pieSections.map((section) {
+                    // 色からタグ名を逆引き
+                    String tagName = "Other";
+                    return const SizedBox.shrink();
+                  }).toList(),
+                ),
+              ),
+            ],
             const SizedBox(height: 30),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -263,14 +443,23 @@ class _SkillDetailScreenState extends State<SkillDetailScreen> {
                 itemBuilder: (context, index) {
                   final item = historyList[index];
                   return ListTile(
-                    leading: const Icon(Icons.check_circle_outline, color: Colors.teal),
+                    leading: Icon(Icons.check_circle, color: _getTagColor(item.tag)),
                     title: Text(
                       DateFormat('yyyy/MM/dd HH:mm').format(item.date),
                       style: const TextStyle(fontWeight: FontWeight.w500),
                     ),
-                    subtitle: item.memo.isNotEmpty
-                      ? Text(item.memo, maxLines: 1, overflow: TextOverflow.ellipsis)
-                      : null,
+                    subtitle: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                          decoration: BoxDecoration(color: _getTagColor(item.tag).withOpacity(0.1), borderRadius: BorderRadius.circular(2)),
+                          child: Text(item.tag, style: TextStyle(fontSize: 10, color: _getTagColor(item.tag), fontWeight: FontWeight.bold)),
+                        ),
+                        const SizedBox(width: 8),
+                        if (item.memo.isNotEmpty)
+                          Expanded(child: Text(item.memo, maxLines: 1, overflow: TextOverflow.ellipsis)),
+                      ],
+                    ),
                     trailing: Text(
                       _formatHistoryDuration(item.durationSeconds),
                       style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
@@ -292,10 +481,13 @@ class _SkillDetailScreenState extends State<SkillDetailScreen> {
         onPressed: () async {
           final result = await Navigator.push(
             context,
-            MaterialPageRoute(builder: (context) => TimerScreen(skillName: widget.skill.name)),
+            MaterialPageRoute(builder: (context) => TimerScreen(
+              skillName: widget.skill.name,
+              availableTags: myTags,
+            )),
           );
           if (result != null && result is Map) {
-            _saveSession(result['seconds'], result['memo']);
+            _saveSession(result['seconds'], result['memo'], result['tag']);
           }
         },
       ),
