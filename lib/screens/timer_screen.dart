@@ -19,14 +19,24 @@ class TimerScreen extends StatefulWidget {
 class _TimerScreenState extends State<TimerScreen> {
   late Stopwatch _stopwatch;
   Timer? _timer;
+
+  // 画面内で一時的にタグリストを管理する（追加できるようにするため）
+  late List<String> currentTags;
   late String selectedTag;
 
   @override
   void initState() {
     super.initState();
     _stopwatch = Stopwatch();
-    // タグリストが空なら "General" をデフォルトにする
-    selectedTag = widget.availableTags.isNotEmpty ? widget.availableTags.first : "General";
+    // 親から受け取ったタグリストをコピーして使う
+    currentTags = List.from(widget.availableTags);
+    selectedTag = currentTags.isNotEmpty ? currentTags.first : "General";
+
+    // もしタグが空ならGeneralを入れておく
+    if (currentTags.isEmpty) {
+      currentTags.add("General");
+      selectedTag = "General";
+    }
   }
 
   @override
@@ -46,39 +56,93 @@ class _TimerScreenState extends State<TimerScreen> {
     setState(() {});
   }
 
+  // ★追加: その場でタグを追加するダイアログ
+  void _showAddTagDialogInTimer(Function(String) onAdd) {
+    TextEditingController controller = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text("Add New Tag"),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            decoration: const InputDecoration(hintText: "Tag name"),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Cancel"),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.black),
+              onPressed: () {
+                if (controller.text.isNotEmpty) {
+                  onAdd(controller.text);
+                  Navigator.pop(context);
+                }
+              },
+              child: const Text("Add", style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   void _finishAndSave() {
     String memo = "";
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (context) {
+        // ダイアログ内で状態(タグリスト更新)を反映させるためにStatefulBuilderを使う
         return StatefulBuilder(
-          builder: (context, setState) {
+          builder: (context, setDialogState) {
             return AlertDialog(
               title: const Text("Well done!"),
-              // ★修正点1: キーボードが出てもエラーにならないようにスクロール可能にする
               content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    if (widget.availableTags.isNotEmpty)
-                      DropdownButton<String>(
-                        value: selectedTag,
-                        isExpanded: true,
-                        items: widget.availableTags.map((String tag) {
-                          return DropdownMenuItem<String>(
-                            value: tag,
-                            child: Text(tag),
-                          );
-                        }).toList(),
-                        onChanged: (String? newValue) {
-                          if (newValue != null) {
-                            setState(() {
-                              selectedTag = newValue;
+                    // ドロップダウンと追加ボタンを横並びにする
+                    Row(
+                      children: [
+                        Expanded(
+                          child: DropdownButton<String>(
+                            value: selectedTag,
+                            isExpanded: true,
+                            items: currentTags.map((String tag) {
+                              return DropdownMenuItem<String>(
+                                value: tag,
+                                child: Text(tag),
+                              );
+                            }).toList(),
+                            onChanged: (String? newValue) {
+                              if (newValue != null) {
+                                setDialogState(() { // ダイアログ内の再描画
+                                  selectedTag = newValue;
+                                });
+                              }
+                            },
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.add_circle_outline),
+                          onPressed: () {
+                            _showAddTagDialogInTimer((newTag) {
+                              // 新しいタグが追加されたらリストに加え、それを選択状態にする
+                              setDialogState(() {
+                                if (!currentTags.contains(newTag)) {
+                                  currentTags.add(newTag);
+                                }
+                                selectedTag = newTag;
+                              });
                             });
-                          }
-                        },
-                      ),
+                          },
+                        ),
+                      ],
+                    ),
                     const SizedBox(height: 10),
                     TextField(
                       autofocus: true,
@@ -106,7 +170,7 @@ class _TimerScreenState extends State<TimerScreen> {
                     Navigator.pop(context, {
                       'seconds': _stopwatch.elapsed.inSeconds,
                       'memo': memo,
-                      'tag': selectedTag,
+                      'tag': selectedTag, // 新しく追加されたタグかもしれない
                     });
                   },
                   child: const Text("Save", style: TextStyle(color: Colors.white)),
@@ -147,7 +211,6 @@ class _TimerScreenState extends State<TimerScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 ElevatedButton(
-                  // ★修正点2: const を追加
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.black,
                     shape: const CircleBorder(),

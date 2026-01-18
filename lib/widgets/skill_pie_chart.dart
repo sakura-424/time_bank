@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../models/history_time.dart';
 import '../utils/app_utils.dart';
-import 'floating_tooltip.dart';
+import 'floating_tooltip.dart'; // さっき作った吹き出し
 
 class SkillPieChart extends StatefulWidget {
   final List<HistoryItem> historyList;
@@ -17,7 +17,7 @@ class _SkillPieChartState extends State<SkillPieChart> {
 
   @override
   Widget build(BuildContext context) {
-    // 集計処理
+    // 1. データを集計
     Map<String, int> tagTotals = {};
     int totalSeconds = 0;
     for (var item in widget.historyList) {
@@ -29,35 +29,82 @@ class _SkillPieChartState extends State<SkillPieChart> {
 
     final pieSections = _getSections(tagTotals, totalSeconds);
 
-    return SizedBox(
-      height: 250,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          PieChart(
-            PieChartData(
-              pieTouchData: PieTouchData(
-                touchCallback: (FlTouchEvent event, pieTouchResponse) {
-                  setState(() {
-                    if (!event.isInterestedForInteractions ||
-                        pieTouchResponse == null ||
-                        pieTouchResponse.touchedSection == null) {
-                      touchedIndex = -1;
-                      return;
-                    }
-                    touchedIndex = pieTouchResponse.touchedSection!.touchedSectionIndex;
-                  });
-                },
+    return Column(
+      children: [
+        // --- 円グラフ本体 ---
+        SizedBox(
+          height: 250,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              PieChart(
+                PieChartData(
+                  pieTouchData: PieTouchData(
+                    touchCallback: (FlTouchEvent event, pieTouchResponse) {
+                      setState(() {
+                        if (!event.isInterestedForInteractions ||
+                            pieTouchResponse == null ||
+                            pieTouchResponse.touchedSection == null) {
+                          touchedIndex = -1;
+                          return;
+                        }
+                        touchedIndex = pieTouchResponse.touchedSection!.touchedSectionIndex;
+                      });
+                    },
+                  ),
+                  sections: pieSections,
+                  centerSpaceRadius: 40,
+                  sectionsSpace: 2, // ここを少し広げると、要素ごとの区切りが見えてEChartsっぽくなります
+                ),
               ),
-              sections: pieSections,
-              centerSpaceRadius: 40,
-              sectionsSpace: 2,
-            ),
+              // 触った時のポップアップ（EChartsもマウスオーバーで出るので残します）
+              if (touchedIndex != -1 && touchedIndex < tagTotals.length)
+                FloatingTooltip(text: tagTotals.keys.elementAt(touchedIndex)),
+            ],
           ),
-          if (touchedIndex != -1 && touchedIndex < tagTotals.length)
-            FloatingTooltip(text: tagTotals.keys.elementAt(touchedIndex)),
-        ],
-      ),
+        ),
+
+        const SizedBox(height: 24),
+
+        // --- ★追加: 凡例 (Legend) ---
+        _buildLegend(tagTotals),
+      ],
+    );
+  }
+
+  // ★凡例を作るパーツ
+  Widget _buildLegend(Map<String, int> tagTotals) {
+    return Wrap(
+      alignment: WrapAlignment.center, // 中央揃え
+      spacing: 16, // 横の間隔
+      runSpacing: 8, // 縦の間隔
+      children: tagTotals.keys.map((tag) {
+        final color = AppUtils.getTagColor(tag);
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // 色の丸ポチ
+            Container(
+              width: 12,
+              height: 12,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: color,
+              ),
+            ),
+            const SizedBox(width: 6),
+            // タグ名
+            Text(
+              tag,
+              style: const TextStyle(
+                color: Colors.black87,
+                fontWeight: FontWeight.w500,
+                fontSize: 14,
+              ),
+            ),
+          ],
+        );
+      }).toList(),
     );
   }
 
@@ -67,7 +114,9 @@ class _SkillPieChartState extends State<SkillPieChart> {
       final isTouched = index == touchedIndex;
       final percentage = (entry.value / totalSeconds) * 100;
       final isLarge = percentage > 10;
+
       final double radius = isTouched ? 60 : 50;
+      // グラフの中は％表示だけにしてスッキリさせる
       final String text = isLarge ? '${percentage.toStringAsFixed(0)}%' : '';
 
       final section = PieChartSectionData(

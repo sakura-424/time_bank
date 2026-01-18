@@ -46,6 +46,13 @@ class _SkillDetailScreenState extends State<SkillDetailScreen> {
   }
 
   Future<void> _handleSaveSession(int durationSeconds, String memo, String tag) async {
+    // ★もしタイマー画面で新しいタグが作られていたら、タグリストにも保存しておく
+    if (!myTags.contains(tag)) {
+      myTags.add(tag);
+      await SkillService.saveTags(widget.skill.name, myTags);
+    }
+
+    // リストに追加
     final newItem = HistoryItem(
       date: DateTime.now(),
       durationSeconds: durationSeconds,
@@ -57,10 +64,146 @@ class _SkillDetailScreenState extends State<SkillDetailScreen> {
     _refreshAllData();
   }
 
-  Future<void> _handleDeleteSession(HistoryItem item) async {
-    historyList.remove(item);
+  Future<void> _handleChangeHistoryTag(int index, String newTag) async {
+    final oldItem = historyList[index];
+    setState(() {
+      historyList[index] = HistoryItem(
+        date: oldItem.date,
+        durationSeconds: oldItem.durationSeconds,
+        memo: oldItem.memo,
+        tag: newTag, // タグを更新
+      );
+    });
     await SkillService.saveHistory(widget.skill.name, historyList);
-    _refreshAllData();
+    _refreshAllData(); // グラフの色などを更新
+  }
+
+  // ★タグ変更ダイアログ
+  void _showChangeTagDialog(int index) {
+    String selectedTag = historyList[index].tag;
+    // もし現在のタグがリストになければ（削除された場合など）、リストの最初かGeneralにする
+    if (!myTags.contains(selectedTag)) {
+       selectedTag = myTags.isNotEmpty ? myTags.first : "General";
+    }
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text("Change Tag"),
+              content: DropdownButton<String>(
+                value: selectedTag,
+                isExpanded: true,
+                items: myTags.map((String tag) {
+                  return DropdownMenuItem<String>(
+                    value: tag,
+                    child: Text(tag),
+                  );
+                }).toList(),
+                onChanged: (String? newValue) {
+                  if (newValue != null) {
+                    setDialogState(() {
+                      selectedTag = newValue;
+                    });
+                  }
+                },
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text("Cancel"),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.black),
+                  onPressed: () {
+                    Navigator.pop(context);
+                    _handleChangeHistoryTag(index, selectedTag);
+                  },
+                  child: const Text("Update", style: TextStyle(color: Colors.white)),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // 詳細ダイアログ表示（タグの横に編集ボタンをつける）
+  void _openDetailDialog(int index) {
+    final item = historyList[index];
+    final color = AppUtils.getTagColor(item.tag);
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(DateFormat('yyyy/MM/dd HH:mm').format(item.date), style: const TextStyle(fontSize: 18)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // タグ表示部分を修正: アイコンボタンを追加
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(color: color.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(4)),
+                    child: Text(item.tag, style: TextStyle(color: color, fontWeight: FontWeight.bold)),
+                  ),
+                  const SizedBox(width: 8),
+                  // タグ編集ボタン
+                  IconButton(
+                    icon: const Icon(Icons.edit, size: 16, color: Colors.grey),
+                    onPressed: () {
+                      Navigator.pop(context); // 一旦詳細を閉じる
+                      _showChangeTagDialog(index); // タグ変更ダイアログを開く
+                    },
+                    tooltip: "Change Tag",
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              // 時間
+              Row(children: [
+                  const Icon(Icons.timer, color: Colors.grey, size: 20),
+                  const SizedBox(width: 8),
+                  Text(AppUtils.formatHistoryDuration(item.durationSeconds), style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+              ]),
+              const SizedBox(height: 20),
+              // メモ
+              const Text("Memo:", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
+              const SizedBox(height: 8),
+              Text(item.memo.isEmpty ? "No memo" : item.memo, style: const TextStyle(fontSize: 16)),
+            ],
+          ),
+          actions: [
+            // メモ編集ボタン
+            TextButton.icon(
+              onPressed: () {
+                Navigator.pop(context);
+                _openEditDialog(index);
+              },
+              icon: const Icon(Icons.edit_note, size: 18),
+              label: const Text("Edit Memo"),
+              style: TextButton.styleFrom(foregroundColor: Colors.grey),
+            ),
+            // 削除ボタン
+            TextButton.icon(
+              onPressed: () {
+                Navigator.pop(context);
+                _confirmDelete(index);
+              },
+              icon: const Icon(Icons.delete, size: 18, color: Colors.red),
+              label: const Text("Delete", style: TextStyle(color: Colors.red)),
+            ),
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text("Close")),
+          ],
+        );
+      },
+    );
   }
 
   // --- UI表示ロジック ---
@@ -78,17 +221,6 @@ class _SkillDetailScreenState extends State<SkillDetailScreen> {
           setState(() => myTags.removeAt(index));
           await SkillService.saveTags(widget.skill.name, myTags);
         },
-      ),
-    );
-  }
-
-  void _openDetailDialog(int index) {
-    showDialog(
-      context: context,
-      builder: (context) => HistoryDetailDialog(
-        item: historyList[index],
-        onEdit: () => _openEditDialog(index),
-        onDelete: () => _confirmDelete(index),
       ),
     );
   }
@@ -114,6 +246,15 @@ class _SkillDetailScreenState extends State<SkillDetailScreen> {
         );
       },
     );
+  }
+
+  Future<void> _handleDeleteSession(HistoryItem item) async {
+    // リストから削除
+    historyList.remove(item);
+
+    // 削除後のリストを保存
+    await SkillService.saveHistory(widget.skill.name, historyList);
+    await _refreshAllData();
   }
 
   void _openEditDialog(int index) {
@@ -192,7 +333,7 @@ class _SkillDetailScreenState extends State<SkillDetailScreen> {
                     subtitle: Row(children: [
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                          decoration: BoxDecoration(color: AppUtils.getTagColor(item.tag).withOpacity(0.1), borderRadius: BorderRadius.circular(2)),
+                          decoration: BoxDecoration(color: AppUtils.getTagColor(item.tag).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(2)),
                           child: Text(item.tag, style: TextStyle(fontSize: 10, color: AppUtils.getTagColor(item.tag), fontWeight: FontWeight.bold)),
                         ),
                         const SizedBox(width: 8),
