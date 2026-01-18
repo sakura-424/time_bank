@@ -25,6 +25,7 @@ class _SkillDetailScreenState extends State<SkillDetailScreen> {
   Map<DateTime, int> heatmapDataset = {};
   List<HistoryItem> historyList = [];
   List<String> myTags = [];
+  int touchedIndex = -1;
 
   @override
   void initState() {
@@ -64,7 +65,6 @@ class _SkillDetailScreenState extends State<SkillDetailScreen> {
 
   // --- UI表示ロジック ---
 
-  // タグ管理ダイアログを表示
   void _openTagManager() {
     showDialog(
       context: context,
@@ -82,14 +82,12 @@ class _SkillDetailScreenState extends State<SkillDetailScreen> {
     );
   }
 
-  // 詳細ダイアログを表示（そこから編集へも飛べる）
   void _openDetailDialog(int index) {
     showDialog(
       context: context,
       builder: (context) => HistoryDetailDialog(
         item: historyList[index],
         onEdit: () {
-          // 詳細を閉じた後に編集ダイアログを開く
           _openEditDialog(index);
         },
         onDelete: () {
@@ -105,7 +103,7 @@ class _SkillDetailScreenState extends State<SkillDetailScreen> {
       builder: (context) {
         return AlertDialog(
           title: const Text("Delete History"),
-          content: const Text("Are you sure you want to delete this record? Time will be subtraced."),
+          content: const Text("Are you sure you want to delete this record? Time will be subtracted."),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
@@ -125,7 +123,6 @@ class _SkillDetailScreenState extends State<SkillDetailScreen> {
     );
   }
 
-  // 編集ダイアログを表示
   void _openEditDialog(int index) {
     showDialog(
       context: context,
@@ -147,31 +144,92 @@ class _SkillDetailScreenState extends State<SkillDetailScreen> {
     );
   }
 
-  // 円グラフデータ生成
-  List<PieChartSectionData> _getPieChartSections() {
-    Map<String, int> tagTotals = {};
-    int total = 0;
-    for (var item in historyList) {
-      tagTotals[item.tag] = (tagTotals[item.tag] ?? 0) + item.durationSeconds;
-      total += item.durationSeconds;
-    }
-    if (total == 0) return [];
+  // ★追加: カレンダーの日付タップ時のダイアログ
+  void _showCalendarDayDialog(DateTime date, int dailyMinutes, int weeklyMinutes) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(DateFormat('yyyy/MM/dd (E)').format(date)), // 例: 2026/01/20 (Tue)
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // その日の時間
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text("Daily Total:", style: TextStyle(fontWeight: FontWeight.bold)),
+                  Text(
+                    AppUtils.formatMinutes(dailyMinutes),
+                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 15),
+              // 週の合計
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text("Weekly Total:", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+                  Text(
+                    AppUtils.formatMinutes(weeklyMinutes),
+                    style: const TextStyle(fontSize: 16, color: Colors.grey),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Close"),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  List<PieChartSectionData> _getPieChartSections(Map<String, int> tagTotals, int totalSeconds) {
+    if (totalSeconds == 0) return [];
+
+    int index = 0;
     return tagTotals.entries.map((entry) {
-      final percentage = (entry.value / total) * 100;
+      final isTouched = index == touchedIndex;
+      final percentage = (entry.value / totalSeconds) * 100;
       final isLarge = percentage > 10;
-      return PieChartSectionData(
+
+      final double radius = isTouched ? 60 : 50;
+      final String text = isLarge ? '${percentage.toStringAsFixed(0)}%' : '';
+
+      final section = PieChartSectionData(
         color: AppUtils.getTagColor(entry.key),
         value: entry.value.toDouble(),
-        title: isLarge ? '${percentage.toStringAsFixed(0)}%' : '',
-        radius: 50,
-        titleStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
+        title: text,
+        radius: radius,
+        titleStyle: TextStyle(
+          fontSize: isTouched ? 16 : 14,
+          fontWeight: FontWeight.bold,
+          color: Colors.white,
+        ),
+        borderSide: isTouched ? const BorderSide(color: Colors.white, width: 2) : BorderSide.none,
       );
+
+      index++;
+      return section;
     }).toList();
   }
 
   @override
   Widget build(BuildContext context) {
-    final pieSections = _getPieChartSections();
+
+    Map<String, int> tagTotals = {};
+    int totalSeconds = 0;
+    for (var item in historyList) {
+      tagTotals[item.tag] = (tagTotals[item.tag] ?? 0) + item.durationSeconds;
+      totalSeconds += item.durationSeconds;
+    }
+    final pieSections = _getPieChartSections(tagTotals, totalSeconds);
 
     return Scaffold(
       appBar: AppBar(
@@ -179,7 +237,7 @@ class _SkillDetailScreenState extends State<SkillDetailScreen> {
         iconTheme: const IconThemeData(color: Colors.black),
         title: Text(widget.skill.name, style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
         actions: [
-          IconButton(icon: const Icon(Icons.settings), onPressed: _openTagManager), // 切り出した関数を呼ぶ
+          IconButton(icon: const Icon(Icons.settings), onPressed: _openTagManager),
         ],
       ),
       body: SingleChildScrollView(
@@ -193,15 +251,57 @@ class _SkillDetailScreenState extends State<SkillDetailScreen> {
                 style: const TextStyle(fontSize: 40, fontWeight: FontWeight.bold),
               ),
             ),
+
             if (pieSections.isNotEmpty) ...[
               const SizedBox(height: 30),
               SizedBox(
-                height: 200,
-                child: PieChart(PieChartData(sections: pieSections, centerSpaceRadius: 40, sectionsSpace: 2)),
+                height: 250,
+                child: Stack(
+                  children: [
+                    PieChart(
+                      PieChartData(
+                        pieTouchData: PieTouchData(
+                          touchCallback: (FlTouchEvent event, pieTouchResponse) {
+                            setState(() {
+                              if (!event.isInterestedForInteractions ||
+                                  pieTouchResponse == null ||
+                                  pieTouchResponse.touchedSection == null) {
+                                touchedIndex = -1;
+                                return;
+                              }
+                              touchedIndex = pieTouchResponse.touchedSection!.touchedSectionIndex;
+                            });
+                          },
+                        ),
+                        sections: pieSections,
+                        centerSpaceRadius: 40,
+                        sectionsSpace: 2,
+                      ),
+                    ),
+                    if (touchedIndex != -1 && touchedIndex < tagTotals.length)
+                      Center(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Colors.black87,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            tagTotals.keys.elementAt(touchedIndex),
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
               ),
             ],
+
             const SizedBox(height: 30),
-            Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: const Text("Activity", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold))),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: const Text("Activity", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold))
+            ),
             const SizedBox(height: 10),
             HeatMapCalendar(
               defaultColor: Colors.grey[200],
@@ -209,18 +309,13 @@ class _SkillDetailScreenState extends State<SkillDetailScreen> {
               colorMode: ColorMode.opacity,
               datasets: heatmapDataset,
               colorsets: const { 1: Colors.teal },
+              // ★ここを変更: SnackBarではなくDialogを表示する関数を呼ぶ
               onClick: (value) {
                 if (value != null) {
                   final dailyMinutes = heatmapDataset[value] ?? 0;
                   final weeklyMinutes = SkillService.getWeeklyTotal(value, heatmapDataset);
-                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text("Daily: ${AppUtils.formatMinutes(dailyMinutes)} (Weekly: ${AppUtils.formatMinutes(weeklyMinutes)})"),
-                      duration: const Duration(seconds: 2),
-                      behavior: SnackBarBehavior.floating,
-                    ),
-                  );
+
+                  _showCalendarDayDialog(value, dailyMinutes, weeklyMinutes);
                 }
               },
             ),
