@@ -151,4 +151,48 @@ class SkillService {
     }
     return totalMinutes;
   }
+
+  // スキルを完全に削除する
+  static Future<void> deleteSkill(String skillName) async {
+    final prefs = await SharedPreferences.getInstance();
+
+    // 1. 基本データの削除
+    await prefs.remove(skillName); // 合計時間
+    await prefs.remove('${skillName}_history'); // 履歴リスト
+    await prefs.remove('tags_$skillName'); // タグリスト
+
+    // 2. カレンダーデータの削除（キー検索して削除）
+    final allKeys = prefs.getKeys();
+    final String prefix = "${skillName}_";
+    for (String key in allKeys) {
+      if (key.startsWith(prefix)) {
+        await prefs.remove(key);
+      }
+    }
+  }
+
+  // スキルの名前を変更する（データ移行）
+  static Future<void> renameSkill(Skill skill, String newName) async {
+    final prefs = await SharedPreferences.getInstance();
+    String oldName = skill.name;
+
+    if (oldName == newName) return;
+
+    // 1. 古いデータを全部読み込む
+    int totalTime = prefs.getInt(oldName) ?? 0;
+    List<String> tags = await loadTags(oldName);
+    List<HistoryItem> history = await loadHistory(oldName);
+
+    // 2. 新しい名前で保存し直す
+    skill.name = newName; // オブジェクトの名前更新
+    await prefs.setInt(newName, totalTime);
+    await saveTags(newName, tags);
+    await saveHistory(newName, history);
+
+    // syncDataFromHistory を呼んでカレンダーデータを新しい名前で展開・再構築
+    await syncDataFromHistory(skill, history);
+
+    // 3. 古いデータを削除する
+    await deleteSkill(oldName);
+  }
 }

@@ -1,82 +1,168 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
 import '../models/skill.dart';
+import '../services/skill_service.dart';
 import 'skill_detail_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  List<Skill> mySkills = [];
+  List<Skill> skills = [];
+  final TextEditingController _skillController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    _loadData();
+    _loadSkills();
   }
 
-  Future<void> _loadData() async {
+  // スキル一覧の読み込み
+  Future<void> _loadSkills() async {
     final prefs = await SharedPreferences.getInstance();
+    // 保存されているキーの中から、システム用以外のものを探してスキルとみなす簡易ロジック
+    // (本来は別途スキル名のリストを保存するのが確実ですが、今回は既存の仕組みに合わせてキー検索します)
+    final keys = prefs.getKeys();
+
+    // 除外するキーワード（履歴やタグなどのシステムデータ）
+    final systemPrefixes = ['tags_', 'flutter.'];
+    final systemSuffixes = ['_history'];
+
+    final skillNames = keys.where((key) {
+      // 数値(合計時間)が保存されているキーのみ対象
+      if (prefs.get(key) is! int) return false;
+
+      // 日付データ(yyyyMMdd)は除外
+      // スキル名_yyyyMMdd の形式になっているはずなので、"_"が含まれ、かつ末尾が数字8桁なら除外
+      if (key.contains('_')) {
+        final parts = key.split('_');
+        final potentialDate = parts.last;
+        if (potentialDate.length == 8 && int.tryParse(potentialDate) != null) {
+          return false;
+        }
+      }
+
+      // 明らかなシステムキーを除外
+      if (systemPrefixes.any((prefix) => key.startsWith(prefix))) return false;
+      if (systemSuffixes.any((suffix) => key.endsWith(suffix))) return false;
+
+      return true;
+    }).toList();
+
+    List<Skill> loadedSkills = [];
+    for (String name in skillNames) {
+      int seconds = prefs.getInt(name) ?? 0;
+      loadedSkills.add(Skill(name: name, totalTime: Duration(seconds: seconds)));
+    }
+
+    // 時間が多い順にソート
+    loadedSkills.sort((a, b) => b.totalTime.compareTo(a.totalTime));
+
     setState(() {
-      List<String>? savedSkillNames = prefs.getStringList('skill_names');
-      if (savedSkillNames != null) {
-        mySkills = savedSkillNames.map((name) => Skill(name: name)).toList();
-      } else {
-        mySkills = [Skill(name: "Programming"), Skill(name: "English")];
-      }
-      for (var skill in mySkills) {
-        int seconds = prefs.getInt(skill.name) ?? 0;
-        skill.totalTime = Duration(seconds: seconds);
-      }
+      skills = loadedSkills;
     });
   }
 
-  Future<void> _addNewSkill(String newSkillName) async {
-    if (newSkillName.isEmpty)
-      return ;
+  Future<void> _addSkill(String name) async {
+    if (name.isEmpty) return;
     final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      mySkills.add(Skill(name: newSkillName));
-    });
-    List<String> nameList = mySkills.map((skill) => skill.name).toList();
-    await prefs.setStringList('skill_names', nameList);
+    if (prefs.containsKey(name)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Skill already exists!")),
+      );
+      return;
+    }
+    await prefs.setInt(name, 0);
+    _skillController.clear();
+    _loadSkills();
   }
 
-  String _formatTotalTime(Duration d) {
-    String twoDigits(int n) => n.toString().padLeft(2, "0");
-    String hours = d.inHours.toString();
-    String minutes = twoDigits(d.inMinutes.remainder(60));
-    String seconds = twoDigits(d.inSeconds.remainder(60));
-    return '${hours}h ${minutes}m ${seconds}s';
-  }
-
-  void _showAddSkillDialog() {
-    String newName = "";
+  // ★追加: 名前変更ダイアログ
+  void _showRenameDialog(Skill skill) {
+    TextEditingController renameController = TextEditingController(text: skill.name);
     showDialog(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text("New Skill"),
-          content: TextField(
-            autofocus: true,
-            decoration: const InputDecoration(hintText: "Enter skill nmae"),
-            onChanged: (value) => newName = value,
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
-            TextButton(
-              onPressed: () {
-                _addNewSkill(newName);
+      builder: (context) => AlertDialog(
+        title: const Text("Rename Skill"),
+        content: TextField(
+          controller: renameController,
+          autofocus: true,
+          decoration: const InputDecoration(labelText: "New Name"),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.black),
+            onPressed: () async {
+              final newName = renameController.text.trim();
+              if (newName.isNotEmpty && newName != skill.name) {
                 Navigator.pop(context);
-              },
-              child: const Text("Add"),
-            ),
-          ],
+                // Serviceを使ってリネーム
+                await SkillService.renameSkill(skill, newName);
+                _loadSkills(); // リスト再読み込み
+              }
+            },
+            child: const Text("Rename", style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ★追加: 削除確認ダイアログ
+  void _confirmDeleteSkill(Skill skill) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Delete Skill"),
+        content: Text("Delete '${skill.name}' and all history?"),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () async {
+              Navigator.pop(context);
+              // Serviceを使って削除
+              await SkillService.deleteSkill(skill.name);
+              _loadSkills(); // リスト再読み込み
+            },
+            child: const Text("Delete", style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ★追加: 長押し時のメニュー（ボトムシート）
+  void _showSkillOptions(Skill skill) {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) {
+        return SafeArea(
+          child: Wrap(
+            children: [
+              ListTile(
+                leading: const Icon(Icons.edit),
+                title: const Text('Rename'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _showRenameDialog(skill);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.delete, color: Colors.red),
+                title: const Text('Delete', style: TextStyle(color: Colors.red)),
+                onTap: () {
+                  Navigator.pop(context);
+                  _confirmDeleteSkill(skill);
+                },
+              ),
+            ],
+          ),
         );
       },
     );
@@ -85,40 +171,94 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Time Assets')),
-      body: mySkills.isEmpty
-        ? const Center(child: Text("Press + to add a skill"))
-        : ListView.separated(
-          padding: const EdgeInsets.all(20),
-          itemCount: mySkills.length,
-          separatorBuilder: (context, index) => const Divider(height: 30),
-          itemBuilder: (context, index) {
-            final skill = mySkills[index];
-            return ListTile(
-              contentPadding: EdgeInsets.zero,
-              title: Text(skill.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w500)),
-              trailing: Text(
-                _formatTotalTime(skill.totalTime),
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  fontFeatures: [FontFeature.tabularFigures()],
-                ),
-              ),
-              onTap: () async {
-                await Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => SkillDetailScreen(skill: skill)),
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        title: const Text("Time Bank", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+        elevation: 0,
+      ),
+      body: skills.isEmpty
+          ? const Center(child: Text("Add a skill to start tracking!", style: TextStyle(color: Colors.grey)))
+          : ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: skills.length,
+              itemBuilder: (context, index) {
+                final skill = skills[index];
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  elevation: 2,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(12),
+                    // ★タップで詳細へ
+                    onTap: () async {
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => SkillDetailScreen(skill: skill)),
+                      );
+                      _loadSkills(); // 戻ってきたら時間を更新するためにリロード
+                    },
+                    // ★長押しでメニュー表示
+                    onLongPress: () {
+                      _showSkillOptions(skill);
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  skill.name,
+                                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  "${skill.totalTime.inHours}h ${skill.totalTime.inMinutes.remainder(60)}m",
+                                  style: const TextStyle(color: Colors.grey, fontSize: 14),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+                        ],
+                      ),
+                    ),
+                  ),
                 );
-                _loadData();
               },
-            );
-          },
-        ),
+            ),
       floatingActionButton: FloatingActionButton(
         backgroundColor: Colors.black,
         child: const Icon(Icons.add, color: Colors.white),
-        onPressed: _showAddSkillDialog,
+        onPressed: () {
+          showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text("New Skill"),
+              content: TextField(
+                controller: _skillController,
+                autofocus: true,
+                decoration: const InputDecoration(hintText: "Enter skill name"),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text("Cancel"),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.black),
+                  onPressed: () {
+                    _addSkill(_skillController.text.trim());
+                    Navigator.pop(context);
+                  },
+                  child: const Text("Add", style: TextStyle(color: Colors.white)),
+                ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
