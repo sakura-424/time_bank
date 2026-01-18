@@ -3,7 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 
 import '../models/skill.dart';
-import '../models/history_time.dart';
+import '../models/history_time.dart'; // ※ファイル名が history_time.dart の場合はそちらに合わせてください
 
 class SkillService {
 
@@ -32,6 +32,70 @@ class SkillService {
     // 日付順に並び替え
     list.sort((a, b) => b.date.compareTo(a.date));
     return list;
+  }
+
+  // ★修正: 古いデータを削除してから再計算する
+  static Future<Map<String, dynamic>> syncDataFromHistory(Skill skill, List<HistoryItem> historyList) async {
+    final prefs = await SharedPreferences.getInstance();
+
+    // --- 【追加】クリーンアップ処理 開始 ---
+
+    final allKeys = prefs.getKeys(); // 保存されている全キーを取得
+    final String prefix = "${skill.name}_";
+
+    for (String key in allKeys) {
+      // このスキルのキーかチェック
+      if (key.startsWith(prefix)) {
+        // キーの末尾（日付部分）を取り出す
+        String suffix = key.substring(prefix.length);
+
+        // 末尾が8桁の数字（yyyyMMdd）であれば、それはカレンダー用のデータなので削除する
+        if (suffix.length == 8 && int.tryParse(suffix) != null) {
+          await prefs.remove(key);
+        }
+      }
+    }
+
+    //  合計時間をゼロから再計算
+    int totalSeconds = 0;
+    // カレンダーデータもゼロから再計算
+    Map<DateTime, int> newHeatmap = {};
+
+    // 履歴を全件回して集計しなおす
+    for (var item in historyList) {
+      totalSeconds += item.durationSeconds;
+
+      // 日付ごとの集計
+      DateTime dateKey = DateTime(item.date.year, item.date.month, item.date.day);
+
+      // 分単位で加算 (カレンダーライブラリの仕様)
+      int minutes = (item.durationSeconds / 60).ceil();
+      newHeatmap[dateKey] = (newHeatmap[dateKey] ?? 0) + minutes;
+    }
+
+    // 合計時間を保存
+    skill.totalTime = Duration(seconds: totalSeconds);
+    await prefs.setInt(skill.name, totalSeconds);
+
+    // カレンダー用データを保存
+    for (var entry in newHeatmap.entries) {
+      String key = "${skill.name}_${DateFormat('yyyyMMdd').format(entry.key)}";
+
+      // その日の合計秒数を計算
+      int dayTotalSeconds = historyList
+          .where((item) =>
+              item.date.year == entry.key.year &&
+              item.date.month == entry.key.month &&
+              item.date.day == entry.key.day)
+          .fold(0, (sum, item) => sum + item.durationSeconds);
+
+      await prefs.setInt(key, dayTotalSeconds);
+    }
+
+    return {
+      'totalTime': totalSeconds,
+      'heatmap': newHeatmap,
+    };
   }
 
   // 履歴リストの保存
@@ -77,41 +141,14 @@ class SkillService {
   // 週の合計時間を計算
   static int getWeeklyTotal(DateTime date, Map<DateTime, int> heatmapDataset) {
     int difference = date.weekday == 7 ? 0 : date.weekday;
-    DateTime startOfWeek = date.subtract(Duration(days: difference));
-    startOfWeek = DateTime(startOfWeek.year, startOfWeek.month, startOfWeek.day);
+    DateTime startOfWeek = DateTime(date.year, date.month, date.day).subtract(Duration(days: difference));
     int totalMinutes = 0;
-    for (int i = 0; i < 7; i++)
-    {
+    for (int i = 0; i < 7; i++) {
       DateTime checkDate = startOfWeek.add(Duration(days: i));
       if (heatmapDataset.containsKey(checkDate)) {
         totalMinutes += heatmapDataset[checkDate]!;
       }
     }
     return totalMinutes;
-  }
-
-  // 履歴作所と時間の巻き戻し
-  static Future<void> deleteSession(Skill skill, HistoryItem item, List<HistoryItem> currentList) async {
-    final prefs = await SharedPreferences.getInstance();
-
-    // リストから削除
-    currentList.remove(item);
-    List<String> jsonList = currentList.map((i) => jsonEncode(i.toJson())).toList();
-    await prefs.setStringList('${skill.name}_history', jsonList);
-
-    // 合計時間からマイナスして保存
-    skill.totalTime -= Duration(seconds: item.durationSeconds);
-    if (skill.totalTime.isNegative) {
-      skill.totalTime = Duration.zero;
-    }
-    await prefs.setInt(skill.name, skill.totalTime.inSeconds);
-
-    // カレンダーからマイナスして保存
-    String dateKey = "${skill.name}_${DateFormat('yyyyMMdd').format(item.date)}";
-    int currentDaySeconds = prefs.getInt(dateKey) ?? 0;
-    int newDaySeconds = currentDaySeconds - item.durationSeconds;
-
-    if (newDaySeconds < 0) newDaySeconds = 0;
-    await prefs.setInt(dateKey, newDaySeconds);
   }
 }

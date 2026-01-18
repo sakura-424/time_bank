@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_heatmap_calendar/flutter_heatmap_calendar.dart';
 import 'package:intl/intl.dart';
@@ -25,7 +26,14 @@ class _SkillDetailScreenState extends State<SkillDetailScreen> {
   Map<DateTime, int> heatmapDataset = {};
   List<HistoryItem> historyList = [];
   List<String> myTags = [];
+
+  // 円グラフ用タッチインデックス
   int touchedIndex = -1;
+
+  // カレンダー用ツールチップ管理
+  Timer? _calendarTooltipTimer;
+  bool _showCalendarTooltip = false;
+  String _calendarTooltipText = "";
 
   @override
   void initState() {
@@ -33,20 +41,31 @@ class _SkillDetailScreenState extends State<SkillDetailScreen> {
     _refreshAllData();
   }
 
+  @override
+  void dispose() {
+    _calendarTooltipTimer?.cancel();
+    super.dispose();
+  }
+
   Future<void> _refreshAllData() async {
+    // 1. まず履歴とタグを読み込む
     final tags = await SkillService.loadTags(widget.skill.name);
     final history = await SkillService.loadHistory(widget.skill.name);
-    final heatmap = await SkillService.loadHeatmapData(widget.skill.name);
+
+    // 2. 履歴をもとに、合計時間とヒートマップを再計算して整合させる
+    final syncResult = await SkillService.syncDataFromHistory(widget.skill, history);
 
     setState(() {
       myTags = tags;
       historyList = history;
-      heatmapDataset = heatmap;
+      // 再計算されたデータをセット
+      widget.skill.totalTime = Duration(seconds: syncResult['totalTime']);
+      heatmapDataset = syncResult['heatmap'];
     });
   }
 
   Future<void> _handleSaveSession(int durationSeconds, String memo, String tag) async {
-    await SkillService.saveSession(widget.skill, durationSeconds);
+    // リストに追加
     final newItem = HistoryItem(
       date: DateTime.now(),
       durationSeconds: durationSeconds,
@@ -54,12 +73,15 @@ class _SkillDetailScreenState extends State<SkillDetailScreen> {
       tag: tag
     );
     historyList.insert(0, newItem);
+    // 履歴を保存
     await SkillService.saveHistory(widget.skill.name, historyList);
+    // 全体を再計算して更新
     _refreshAllData();
   }
 
   Future<void> _handleDeleteSession(HistoryItem item) async {
-    await SkillService.deleteSession(widget.skill, item, historyList);
+    historyList.remove(item);
+    await SkillService.saveHistory(widget.skill.name, historyList);
     _refreshAllData();
   }
 
@@ -144,50 +166,22 @@ class _SkillDetailScreenState extends State<SkillDetailScreen> {
     );
   }
 
-  // ★追加: カレンダーの日付タップ時のダイアログ
-  void _showCalendarDayDialog(DateTime date, int dailyMinutes, int weeklyMinutes) {
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text(DateFormat('yyyy/MM/dd (E)').format(date)), // 例: 2026/01/20 (Tue)
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // その日の時間
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text("Daily Total:", style: TextStyle(fontWeight: FontWeight.bold)),
-                  Text(
-                    AppUtils.formatMinutes(dailyMinutes),
-                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 15),
-              // 週の合計
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text("Weekly Total:", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
-                  Text(
-                    AppUtils.formatMinutes(weeklyMinutes),
-                    style: const TextStyle(fontSize: 16, color: Colors.grey),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text("Close"),
-            ),
-          ],
-        );
-      },
-    );
+  void _triggerCalendarTooltip(DateTime date, int dailySeconds, int weeklySeconds) {
+    _calendarTooltipTimer?.cancel();
+
+    setState(() {
+      _showCalendarTooltip = true;
+      _calendarTooltipText = "${DateFormat('MM/dd').format(date)}\n"
+          "Day: ${AppUtils.formatExactTime(dailySeconds)}\nWeek: ${AppUtils.formatExactTime(weeklySeconds)}";
+    });
+
+    _calendarTooltipTimer = Timer(const Duration(seconds: 1), () {
+      if (mounted) {
+        setState(() {
+          _showCalendarTooltip = false;
+        });
+      }
+    });
   }
 
   List<PieChartSectionData> _getPieChartSections(Map<String, int> tagTotals, int totalSeconds) {
@@ -220,6 +214,26 @@ class _SkillDetailScreenState extends State<SkillDetailScreen> {
     }).toList();
   }
 
+  // ★共通デザイン: ふわっと浮き出る半透明ラベル
+  Widget _buildFloatingLabel(String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.grey.withValues(alpha: 0.8),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        text,
+        textAlign: TextAlign.center,
+        style: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.bold,
+          fontSize: 14,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
 
@@ -246,8 +260,9 @@ class _SkillDetailScreenState extends State<SkillDetailScreen> {
           children: [
             const SizedBox(height: 20),
             Center(
+              // ★変更: 合計時間に秒を追加
               child: Text(
-                "${widget.skill.totalTime.inHours}h ${widget.skill.totalTime.inMinutes.remainder(60).toString().padLeft(2, '0')}m",
+                "${widget.skill.totalTime.inHours}h ${widget.skill.totalTime.inMinutes.remainder(60).toString().padLeft(2, '0')}m ${widget.skill.totalTime.inSeconds.remainder(60).toString().padLeft(2, '0')}s",
                 style: const TextStyle(fontSize: 40, fontWeight: FontWeight.bold),
               ),
             ),
@@ -257,6 +272,7 @@ class _SkillDetailScreenState extends State<SkillDetailScreen> {
               SizedBox(
                 height: 250,
                 child: Stack(
+                  alignment: Alignment.center,
                   children: [
                     PieChart(
                       PieChartData(
@@ -279,19 +295,7 @@ class _SkillDetailScreenState extends State<SkillDetailScreen> {
                       ),
                     ),
                     if (touchedIndex != -1 && touchedIndex < tagTotals.length)
-                      Center(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: Colors.black87,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            tagTotals.keys.elementAt(touchedIndex),
-                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                      ),
+                      _buildFloatingLabel(tagTotals.keys.elementAt(touchedIndex)),
                   ],
                 ),
               ),
@@ -303,22 +307,49 @@ class _SkillDetailScreenState extends State<SkillDetailScreen> {
               child: const Text("Activity", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold))
             ),
             const SizedBox(height: 10),
-            HeatMapCalendar(
-              defaultColor: Colors.grey[200],
-              flexible: true,
-              colorMode: ColorMode.opacity,
-              datasets: heatmapDataset,
-              colorsets: const { 1: Colors.teal },
-              // ★ここを変更: SnackBarではなくDialogを表示する関数を呼ぶ
-              onClick: (value) {
-                if (value != null) {
-                  final dailyMinutes = heatmapDataset[value] ?? 0;
-                  final weeklyMinutes = SkillService.getWeeklyTotal(value, heatmapDataset);
 
-                  _showCalendarDayDialog(value, dailyMinutes, weeklyMinutes);
+            // カレンダー部分
+            NotificationListener<ScrollNotification>(
+              onNotification: (scrollNotification) {
+                if (scrollNotification is ScrollStartNotification) {
+                   _calendarTooltipTimer?.cancel();
+                   setState(() {
+                     _showCalendarTooltip = false;
+                   });
                 }
+                return false;
               },
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  HeatMapCalendar(
+                    defaultColor: Colors.grey[200],
+                    flexible: true,
+                    colorMode: ColorMode.opacity,
+                    datasets: heatmapDataset,
+                    colorsets: const { 1: Colors.teal },
+                    onClick: (value) {
+                      if (value != null) {
+                        // ★変更: 履歴リストから正確な秒数を計算して渡す
+                        final dailySeconds = AppUtils.getExactDailySeconds(value, historyList);
+                        final weeklySeconds = AppUtils.getExactWeeklySeconds(value, historyList);
+                        _triggerCalendarTooltip(value, dailySeconds, weeklySeconds);
+                      }
+                    },
+                  ),
+                  if (_showCalendarTooltip)
+                    Positioned(
+                      bottom: 10,
+                      child: AnimatedOpacity(
+                        opacity: _showCalendarTooltip ? 1.0 : 0.0,
+                        duration: const Duration(milliseconds: 200),
+                        child: _buildFloatingLabel(_calendarTooltipText),
+                      ),
+                    ),
+                ],
+              ),
             ),
+
             const Divider(height: 40, thickness: 1),
             Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: const Text("History", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold))),
             const SizedBox(height: 10),
@@ -337,7 +368,7 @@ class _SkillDetailScreenState extends State<SkillDetailScreen> {
                     subtitle: Row(children: [
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                          decoration: BoxDecoration(color: AppUtils.getTagColor(item.tag).withOpacity(0.1), borderRadius: BorderRadius.circular(2)),
+                          decoration: BoxDecoration(color: AppUtils.getTagColor(item.tag).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(2)),
                           child: Text(item.tag, style: TextStyle(fontSize: 10, color: AppUtils.getTagColor(item.tag), fontWeight: FontWeight.bold)),
                         ),
                         const SizedBox(width: 8),
@@ -348,7 +379,7 @@ class _SkillDetailScreenState extends State<SkillDetailScreen> {
                   );
                 },
               ),
-              const SizedBox(height: 80),
+            const SizedBox(height: 80),
           ],
         ),
       ),
