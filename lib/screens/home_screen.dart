@@ -4,6 +4,7 @@ import '../models/skill.dart';
 import '../services/skill_service.dart';
 import 'skill_detail_screen.dart';
 import '../services/backup_service.dart';
+import '../utils/app_utils.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -249,74 +250,187 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      // AppBarは設定アイコンだけ置く（タイトルはbodyに書く）
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        title: const Text("Time Bank", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-        elevation: 0,
         actions: [
           IconButton(
-            icon: const Icon(Icons.settings, color: Colors.black),
+            icon: const Icon(Icons.settings_outlined), // アウトラインアイコンの方が今っぽい
             onPressed: _showSettingsMenu,
+          ),
+          const SizedBox(width: 8),
+        ],
+      ),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ★ヘッダー部分
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  "Time Bank",
+                  style: TextStyle(
+                    fontSize: 34,
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFF2D3436),
+                    letterSpacing: -1.0,
+                    height: 1.0,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  "Invest your time wisely.",
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Colors.grey[600],
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 10),
+
+          // ★リスト部分
+          Expanded(
+            child: skills.isEmpty
+                ? _buildEmptyState()
+                : ListView.builder(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                    itemCount: skills.length,
+                    itemBuilder: (context, index) {
+                      final skill = skills[index];
+                      final hours = skill.totalTime.inHours;
+                      final minutes = skill.totalTime.inMinutes.remainder(60);
+                      final levelInfo = AppUtils.getLevelInfo(hours);
+
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 16),
+                        // InkWellの波紋を綺麗に見せるためにMaterialで包む
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onTap: () async {
+                              await Navigator.push(
+                                context,
+                                MaterialPageRoute(builder: (context) => SkillDetailScreen(skill: skill)),
+                              );
+                              _loadSkills();
+                            },
+                            onLongPress: () => _showSkillOptions(skill),
+                            borderRadius: BorderRadius.circular(20),
+                            child: Ink(
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(20),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.grey.withOpacity(0.05),
+                                    spreadRadius: 0,
+                                    blurRadius: 20,
+                                    offset: const Offset(0, 10),
+                                  ),
+                                ],
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.all(20),
+                                child: Row(
+                                  children: [
+                                    // 左側のアイコン（レベルに応じて変化）
+                                    Container(
+                                      width: 50,
+                                      height: 50,
+                                      decoration: BoxDecoration(
+                                        color: (levelInfo['color'] as Color).withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(15),
+                                      ),
+                                      child: Icon(
+                                        levelInfo['icon'],
+                                        color: levelInfo['color'],
+                                        size: 26,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 16),
+
+                                    // 真ん中の情報
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            skill.name,
+                                            style: const TextStyle(
+                                              fontSize: 18,
+                                              fontWeight: FontWeight.bold,
+                                              color: Color(0xFF2D3436),
+                                            ),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          // レベルバッジ
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                            decoration: BoxDecoration(
+                                              color: Colors.grey[100],
+                                              borderRadius: BorderRadius.circular(6),
+                                            ),
+                                            child: Text(
+                                              levelInfo['label'],
+                                              style: TextStyle(
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.bold,
+                                                color: Colors.grey[600],
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+
+                                    // 右側の時間
+                                    Column(
+                                      crossAxisAlignment: CrossAxisAlignment.end,
+                                      children: [
+                                        Text(
+                                          "${hours}h",
+                                          style: const TextStyle(
+                                            fontSize: 24,
+                                            fontWeight: FontWeight.w900, // 数字を強調
+                                            color: Color(0xFF2D3436),
+                                            letterSpacing: -0.5,
+                                          ),
+                                        ),
+                                        Text(
+                                          "${minutes}m",
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            color: Colors.grey[500],
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
           ),
         ],
       ),
-      body: skills.isEmpty
-          ? const Center(child: Text("Add a skill to start tracking!", style: TextStyle(color: Colors.grey)))
-          : ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: skills.length,
-              itemBuilder: (context, index) {
-                final skill = skills[index];
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  elevation: 2,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(12),
-                    // ★タップで詳細へ
-                    onTap: () async {
-                      await Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (context) => SkillDetailScreen(skill: skill)),
-                      );
-                      _loadSkills(); // 戻ってきたら時間を更新するためにリロード
-                    },
-                    // ★長押しでメニュー表示
-                    onLongPress: () {
-                      _showSkillOptions(skill);
-                    },
-                    child: Padding(
-                      padding: const EdgeInsets.all(20),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  skill.name,
-                                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  "${skill.totalTime.inHours}h ${skill.totalTime.inMinutes.remainder(60)}m",
-                                  style: const TextStyle(color: Colors.grey, fontSize: 14),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
-                        ],
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
       floatingActionButton: FloatingActionButton(
-        backgroundColor: Colors.black,
+        backgroundColor: const Color(0xFF2D3436), // 黒に近いグレー
+        elevation: 4,
+        shape: const CircleBorder(),
         child: const Icon(Icons.add, color: Colors.white),
         onPressed: () {
+          // ... (既存の追加処理)
           showDialog(
             context: context,
             builder: (context) => AlertDialog(
@@ -324,25 +438,53 @@ class _HomeScreenState extends State<HomeScreen> {
               content: TextField(
                 controller: _skillController,
                 autofocus: true,
-                decoration: const InputDecoration(hintText: "Enter skill name"),
+                decoration: InputDecoration(
+                  hintText: "Enter skill name",
+                  filled: true,
+                  fillColor: Colors.grey[100],
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
               ),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text("Cancel"),
+                  child: const Text("Cancel", style: TextStyle(color: Colors.grey)),
                 ),
                 ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.black),
                   onPressed: () {
                     _addSkill(_skillController.text.trim());
                     Navigator.pop(context);
                   },
-                  child: const Text("Add", style: TextStyle(color: Colors.white)),
+                  child: const Text("Add"),
                 ),
               ],
             ),
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.hourglass_empty, size: 80, color: Colors.grey[300]),
+          const SizedBox(height: 20),
+          Text(
+            "No skills yet",
+            style: TextStyle(color: Colors.grey[400], fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            "Start investing your time today.",
+            style: TextStyle(color: Colors.grey[400], fontSize: 14),
+          ),
+        ],
       ),
     );
   }

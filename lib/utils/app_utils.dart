@@ -60,4 +60,12 @@ class AppUtils {
             item.date.isBefore(endOfWeek))
         .fold(0, (sum, item) => sum + item.durationSeconds);
   }
+
+  static Map<String, dynamic> getLevelInfo(int totalHours) {
+    if (totalHours < 10) return {'label': 'Novice', 'color': Colors.blueGrey, 'icon': Icons.eco};
+    if (totalHours < 50) return {'label': 'Apprentice', 'color': Colors.teal, 'icon': Icons.directions_walk};
+    if (totalHours < 100) return {'label': 'Specialist', 'color': Colors.orange, 'icon': Icons.landscape};
+    if (totalHours < 500) return {'label': 'Expert', 'color': Colors.purple, 'icon': Icons.flight};
+    return {'label': 'Master', 'color': Colors.black, 'icon': Icons.workspace_premium};
+  }
 }
