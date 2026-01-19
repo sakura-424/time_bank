@@ -34,11 +34,11 @@ class SkillService {
     return list;
   }
 
-  // ★修正: 古いデータを削除してから再計算する
+  // 古いデータを削除してから再計算する
   static Future<Map<String, dynamic>> syncDataFromHistory(Skill skill, List<HistoryItem> historyList) async {
     final prefs = await SharedPreferences.getInstance();
 
-    // --- 【追加】クリーンアップ処理 開始 ---
+    // --- クリーンアップ処理 開始 ---
 
     final allKeys = prefs.getKeys(); // 保存されている全キーを取得
     final String prefix = "${skill.name}_";
@@ -156,12 +156,12 @@ class SkillService {
   static Future<void> deleteSkill(String skillName) async {
     final prefs = await SharedPreferences.getInstance();
 
-    // 1. 基本データの削除
+    // 基本データの削除
     await prefs.remove(skillName); // 合計時間
     await prefs.remove('${skillName}_history'); // 履歴リスト
     await prefs.remove('tags_$skillName'); // タグリスト
 
-    // 2. カレンダーデータの削除（キー検索して削除）
+    // カレンダーデータの削除（キー検索して削除）
     final allKeys = prefs.getKeys();
     final String prefix = "${skillName}_";
     for (String key in allKeys) {
