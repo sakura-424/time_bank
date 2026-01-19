@@ -59,7 +59,12 @@ class _HomeScreenState extends State<HomeScreen> {
     List<Skill> loadedSkills = [];
     for (String name in skillNames) {
       int seconds = prefs.getInt(name) ?? 0;
-      loadedSkills.add(Skill(name: name, totalTime: Duration(seconds: seconds)));
+      loadedSkills.add(
+        Skill(
+          name: name,
+          totalTime: Duration(seconds: seconds),
+        ),
+      );
     }
 
     // 時間が多い順にソート
@@ -74,9 +79,9 @@ class _HomeScreenState extends State<HomeScreen> {
     if (name.isEmpty) return;
     final prefs = await SharedPreferences.getInstance();
     if (prefs.containsKey(name)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Skill already exists!")),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Skill already exists!")));
       return;
     }
     await prefs.setInt(name, 0);
@@ -86,7 +91,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // ★追加: 名前変更ダイアログ
   void _showRenameDialog(Skill skill) {
-    TextEditingController renameController = TextEditingController(text: skill.name);
+    TextEditingController renameController = TextEditingController(
+      text: skill.name,
+    );
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -97,7 +104,10 @@ class _HomeScreenState extends State<HomeScreen> {
           decoration: const InputDecoration(labelText: "New Name"),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancel"),
+          ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.black),
             onPressed: () async {
@@ -124,7 +134,10 @@ class _HomeScreenState extends State<HomeScreen> {
         title: const Text("Delete Skill"),
         content: Text("Delete '${skill.name}' and all history?"),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancel"),
+          ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () async {
@@ -137,37 +150,6 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-    );
-  }
-
-  // 長押し時のメニュー（ボトムシート）
-  void _showSkillOptions(Skill skill) {
-    showModalBottomSheet(
-      context: context,
-      builder: (context) {
-        return SafeArea(
-          child: Wrap(
-            children: [
-              ListTile(
-                leading: const Icon(Icons.edit),
-                title: const Text('Rename'),
-                onTap: () {
-                  Navigator.pop(context);
-                  _showRenameDialog(skill);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.delete, color: Colors.red),
-                title: const Text('Delete', style: TextStyle(color: Colors.red)),
-                onTap: () {
-                  Navigator.pop(context);
-                  _confirmDeleteSkill(skill);
-                },
-              ),
-            ],
-          ),
-        );
-      },
     );
   }
 
@@ -184,7 +166,13 @@ class _HomeScreenState extends State<HomeScreen> {
             children: [
               const Padding(
                 padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
-                child: Text("Settings", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
+                child: Text(
+                  "Settings",
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey,
+                  ),
+                ),
               ),
 
               // ★追加: ダークモード切り替えスイッチ
@@ -194,7 +182,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 value: isDark,
                 onChanged: (bool value) {
                   // スイッチ切り替えでモードを変更
-                  themeNotifier.value = value ? ThemeMode.dark : ThemeMode.light;
+                  themeNotifier.value = value
+                      ? ThemeMode.dark
+                      : ThemeMode.light;
                   Navigator.pop(context); // メニューを閉じる
                 },
               ),
@@ -203,7 +193,13 @@ class _HomeScreenState extends State<HomeScreen> {
 
               const Padding(
                 padding: EdgeInsets.fromLTRB(16, 8, 16, 8),
-                child: Text("Backup & Restore", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
+                child: Text(
+                  "Backup & Restore",
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey,
+                  ),
+                ),
               ),
               ListTile(
                 leading: const Icon(Icons.upload_file),
@@ -229,8 +225,15 @@ class _HomeScreenState extends State<HomeScreen> {
                         context: context,
                         builder: (context) => AlertDialog(
                           title: const Text("Import Successful"),
-                          content: const Text("Your data has been restored successfully."),
-                          actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text("OK"))],
+                          content: const Text(
+                            "Your data has been restored successfully.",
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(context),
+                              child: const Text("OK"),
+                            ),
+                          ],
                         ),
                       );
                     }
@@ -241,7 +244,12 @@ class _HomeScreenState extends State<HomeScreen> {
                       builder: (context) => AlertDialog(
                         title: const Text("Import Failed"),
                         content: Text("An error occurred: $e"),
-                        actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text("OK"))],
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context),
+                            child: const Text("OK"),
+                          ),
+                        ],
                       ),
                     );
                   }
@@ -306,7 +314,10 @@ class _HomeScreenState extends State<HomeScreen> {
             child: skills.isEmpty
                 ? _buildEmptyState()
                 : ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 10,
+                    ),
                     itemCount: skills.length,
                     itemBuilder: (context, index) {
                       final skill = skills[index];
@@ -323,19 +334,22 @@ class _HomeScreenState extends State<HomeScreen> {
                             onTap: () async {
                               await Navigator.push(
                                 context,
-                                MaterialPageRoute(builder: (context) => SkillDetailScreen(skill: skill)),
+                                MaterialPageRoute(
+                                  builder: (context) =>
+                                      SkillDetailScreen(skill: skill),
+                                ),
                               );
                               _loadSkills();
                             },
-                            onLongPress: () => _showSkillOptions(skill),
+                            // onLongPress: () => _showSkillOptions(skill),
                             borderRadius: BorderRadius.circular(20),
                             child: Ink(
                               decoration: BoxDecoration(
-                                color: Colors.white,
+                                color: Theme.of(context).cardTheme.color,
                                 borderRadius: BorderRadius.circular(20),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: Colors.grey.withOpacity(0.05),
+                                    color: Colors.grey.withValues(alpha: 0.05),
                                     spreadRadius: 0,
                                     blurRadius: 20,
                                     offset: const Offset(0, 10),
@@ -343,7 +357,12 @@ class _HomeScreenState extends State<HomeScreen> {
                                 ],
                               ),
                               child: Padding(
-                                padding: const EdgeInsets.all(20),
+                                padding: const EdgeInsets.fromLTRB(
+                                  20,
+                                  20,
+                                  8,
+                                  20,
+                                ),
                                 child: Row(
                                   children: [
                                     // 左側のアイコン（レベルに応じて変化）
@@ -351,7 +370,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                       width: 50,
                                       height: 50,
                                       decoration: BoxDecoration(
-                                        color: (levelInfo['color'] as Color).withOpacity(0.1),
+                                        color: (levelInfo['color'] as Color)
+                                            .withValues(alpha: 0.1),
                                         borderRadius: BorderRadius.circular(15),
                                       ),
                                       child: Icon(
@@ -365,23 +385,33 @@ class _HomeScreenState extends State<HomeScreen> {
                                     // 真ん中の情報
                                     Expanded(
                                       child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
                                         children: [
                                           Text(
                                             skill.name,
-                                            style: const TextStyle(
+                                            style: TextStyle(
                                               fontSize: 18,
                                               fontWeight: FontWeight.bold,
-                                              color: Color(0xFF2D3436),
+                                              color:
+                                                  Theme.of(context)
+                                                      .textTheme
+                                                      .bodyMedium
+                                                      ?.color ??
+                                                  const Color(0xFF2D3436),
                                             ),
                                           ),
                                           const SizedBox(height: 4),
                                           // レベルバッジ
                                           Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 8,
+                                              vertical: 2,
+                                            ),
                                             decoration: BoxDecoration(
                                               color: Colors.grey[100],
-                                              borderRadius: BorderRadius.circular(6),
+                                              borderRadius:
+                                                  BorderRadius.circular(6),
                                             ),
                                             child: Text(
                                               levelInfo['label'],
@@ -398,14 +428,20 @@ class _HomeScreenState extends State<HomeScreen> {
 
                                     // 右側の時間
                                     Column(
-                                      crossAxisAlignment: CrossAxisAlignment.end,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.end,
                                       children: [
                                         Text(
                                           "${hours}h",
-                                          style: const TextStyle(
+                                          style: TextStyle(
                                             fontSize: 24,
-                                            fontWeight: FontWeight.w900, // 数字を強調
-                                            color: Color(0xFF2D3436),
+                                            fontWeight:
+                                                FontWeight.w900, // 数字を強調
+                                            color:
+                                                Theme.of(
+                                                  context,
+                                                ).textTheme.bodyMedium?.color ??
+                                                const Color(0xFF2D3436),
                                             letterSpacing: -0.5,
                                           ),
                                         ),
@@ -419,6 +455,57 @@ class _HomeScreenState extends State<HomeScreen> {
                                         ),
                                       ],
                                     ),
+                                    //「︙」メニューボタン
+                                    PopupMenuButton<String>(
+                                      icon: Icon(
+                                        Icons.more_vert,
+                                        color: Colors.grey[400],
+                                      ),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      onSelected: (value) {
+                                        if (value == 'rename') {
+                                          _showRenameDialog(skill);
+                                        } else if (value == 'delete') {
+                                          _confirmDeleteSkill(skill);
+                                        }
+                                      },
+                                      itemBuilder: (BuildContext context) =>
+                                          <PopupMenuEntry<String>>[
+                                            const PopupMenuItem<String>(
+                                              value: 'rename',
+                                              child: ListTile(
+                                                leading: Icon(
+                                                  Icons.edit,
+                                                  size: 20,
+                                                ),
+                                                title: Text('Rename'),
+                                                contentPadding: EdgeInsets.zero,
+                                                dense: true,
+                                              ),
+                                            ),
+                                            const PopupMenuDivider(),
+                                            const PopupMenuItem<String>(
+                                              value: 'delete',
+                                              child: ListTile(
+                                                leading: Icon(
+                                                  Icons.delete,
+                                                  color: Colors.red,
+                                                  size: 20,
+                                                ),
+                                                title: Text(
+                                                  'Delete',
+                                                  style: TextStyle(
+                                                    color: Colors.red,
+                                                  ),
+                                                ),
+                                                contentPadding: EdgeInsets.zero,
+                                                dense: true,
+                                              ),
+                                            ),
+                                          ],
+                                    ),
                                   ],
                                 ),
                               ),
@@ -431,13 +518,13 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
+
       floatingActionButton: FloatingActionButton(
         backgroundColor: const Color(0xFF2D3436), // 黒に近いグレー
         elevation: 4,
         shape: const CircleBorder(),
         child: const Icon(Icons.add, color: Colors.white),
         onPressed: () {
-          // ... (既存の追加処理)
           showDialog(
             context: context,
             builder: (context) => AlertDialog(
@@ -458,7 +545,10 @@ class _HomeScreenState extends State<HomeScreen> {
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text("Cancel", style: TextStyle(color: Colors.grey)),
+                  child: const Text(
+                    "Cancel",
+                    style: TextStyle(color: Colors.grey),
+                  ),
                 ),
                 ElevatedButton(
                   onPressed: () {
@@ -484,7 +574,11 @@ class _HomeScreenState extends State<HomeScreen> {
           const SizedBox(height: 20),
           Text(
             "No skills yet",
-            style: TextStyle(color: Colors.grey[400], fontSize: 18, fontWeight: FontWeight.bold),
+            style: TextStyle(
+              color: Colors.grey[400],
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
           ),
           const SizedBox(height: 10),
           Text(

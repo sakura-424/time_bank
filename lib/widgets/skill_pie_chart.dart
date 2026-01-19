@@ -17,7 +17,7 @@ class _SkillPieChartState extends State<SkillPieChart> {
 
   @override
   Widget build(BuildContext context) {
-    // 1. データを集計
+    // データを集計
     Map<String, int> tagTotals = {};
     int totalSeconds = 0;
     for (var item in widget.historyList) {
@@ -72,10 +72,10 @@ class _SkillPieChartState extends State<SkillPieChart> {
 
   // ★凡例を作るパーツ
   Widget _buildLegend(Map<String, int> tagTotals) {
-    // ★追加: 現在のテーマがダークモードかどうか判定
+    // ★現在のテーマがダークモードかどうか判定
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    // ★追加: 文字色を動的に決める（ダークなら白、ライトなら黒）
+    // ★文字色を動的に決める（ダークなら白、ライトなら黒）
     final textColor = isDark ? Colors.white70 : Colors.black87;
     return Wrap(
       alignment: WrapAlignment.center, // 中央揃え
