@@ -173,7 +173,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void _showSettingsMenu() {
     showModalBottomSheet(
       context: context,
-      builder: (context) {
+      builder: (sheetContext) {
         return SafeArea(
           child: Wrap(
             children: [
@@ -186,7 +186,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 title: const Text('Export Data'),
                 subtitle: const Text('Save backup file'),
                 onTap: () async {
-                  Navigator.pop(context);
+                  Navigator.pop(sheetContext);
                   await BackupService.exportData(context);
                 },
               ),
@@ -195,7 +195,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 title: const Text('Import Data'),
                 subtitle: const Text('Restore from backup file'),
                 onTap: () async {
-                  Navigator.pop(context);
+                  Navigator.pop(sheetContext);
                   try {
                     // 2. サービスを呼び出す (contextは渡さない)
                     bool success = await BackupService.importData();

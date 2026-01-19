@@ -21,8 +21,7 @@ class BackupService {
 
       for (String key in keys) {
         // キーワードでフィルタリングして、必要なデータだけ集める
-        // 今回はシンプルに、関係ありそうなものを全部突っ込みます
-        // "flutter." で始まる内部データ以外は基本的に全部バックアップ対象にしてOK
+        // "flutter." で始まる内部データ以外は基本的に全部バックアップ対象にする
         if (!key.startsWith('flutter.')) {
            final value = prefs.get(key);
            backupData[key] = value;
