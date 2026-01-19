@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../models/history_time.dart';
 import '../utils/app_utils.dart';
-import 'floating_tooltip.dart'; // さっき作った吹き出し
+import 'floating_tooltip.dart';
 
 class SkillPieChart extends StatefulWidget {
   final List<HistoryItem> historyList;
@@ -54,10 +54,10 @@ class _SkillPieChartState extends State<SkillPieChart> {
                   ),
                   sections: pieSections,
                   centerSpaceRadius: 40,
-                  sectionsSpace: 2, // ここを少し広げると、要素ごとの区切りが見えてEChartsっぽくなります
+                  sectionsSpace: 2,
                 ),
               ),
-              // 触った時のポップアップ（EChartsもマウスオーバーで出るので残します）
+              // 触った時のポップアップ
               if (touchedIndex != -1 && touchedIndex < tagTotals.length)
                 FloatingTooltip(text: tagTotals.keys.elementAt(touchedIndex)),
             ],
@@ -65,8 +65,6 @@ class _SkillPieChartState extends State<SkillPieChart> {
         ),
 
         const SizedBox(height: 24),
-
-        // --- ★追加: 凡例 (Legend) ---
         _buildLegend(tagTotals),
       ],
     );
