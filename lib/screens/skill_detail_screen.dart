@@ -324,22 +324,17 @@ class _SkillDetailScreenState extends State<SkillDetailScreen> {
                   // ★選択されているかどうか
                   final isSelected = _selectedItems.contains(item);
 
-                  return ListTile(
-                    // ★選択中は背景色を少し変える
+                  final listTile = ListTile(
                     selected: isSelected,
                     selectedTileColor: Colors.grey.withOpacity(0.1),
-
-                    // ★アイコン部分の切り替え
                     leading: _isSelectionMode
                         ? Icon(
                             isSelected ? Icons.check_circle : Icons.radio_button_unchecked,
                             color: isSelected ? Colors.black : Colors.grey,
                           )
                         : Icon(Icons.check_circle, color: AppUtils.getTagColor(item.tag)),
-
                     title: Text(DateFormat('yyyy/MM/dd HH:mm').format(item.date), style: const TextStyle(fontWeight: FontWeight.w500)),
                     subtitle: Row(children: [
-                        // 選択モード中はタグバッジを表示しない（シンプルにするため）
                         if (!_isSelectionMode) ...[
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
@@ -351,8 +346,6 @@ class _SkillDetailScreenState extends State<SkillDetailScreen> {
                         if (item.memo.isNotEmpty) Expanded(child: Text(item.memo, maxLines: 1, overflow: TextOverflow.ellipsis)),
                     ]),
                     trailing: Text(AppUtils.formatHistoryDuration(item.durationSeconds), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-
-                    // ★タップ時の挙動切り替え
                     onTap: () {
                       if (_isSelectionMode) {
                         _toggleSelection(item);
@@ -360,8 +353,6 @@ class _SkillDetailScreenState extends State<SkillDetailScreen> {
                         _openDetailDialog(index);
                       }
                     },
-
-                    // ★長押し時の挙動
                     onLongPress: () {
                       if (!_isSelectionMode) {
                         setState(() {
@@ -370,6 +361,56 @@ class _SkillDetailScreenState extends State<SkillDetailScreen> {
                         });
                       }
                     },
+                  );
+
+                  // ★選択モード中はスワイプさせない
+                  if (_isSelectionMode) {
+                    return listTile;
+                  }
+
+                  // ★通常時はDismissibleで囲んでスワイプ削除可能にする
+                  return Dismissible(
+                    key: ObjectKey(item), // そのアイテム固有のキー
+                    direction: DismissDirection.endToStart, // 右から左へのスワイプのみ許可
+
+                    // スワイプした時の背景（赤いゴミ箱）
+                    background: Container(
+                      alignment: Alignment.centerRight,
+                      padding: const EdgeInsets.only(right: 20),
+                      color: Colors.red,
+                      child: const Icon(Icons.delete, color: Colors.white),
+                    ),
+
+                    // スワイプした瞬間の確認ロジック
+                    confirmDismiss: (direction) async {
+                      return await showDialog(
+                        context: context,
+                        builder: (BuildContext context) {
+                          return AlertDialog(
+                            title: const Text("Delete History"),
+                            content: const Text("Are you sure you want to delete this record?"),
+                            actions: <Widget>[
+                              TextButton(
+                                onPressed: () => Navigator.of(context).pop(false), // キャンセル
+                                child: const Text("Cancel"),
+                              ),
+                              ElevatedButton(
+                                style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                                onPressed: () => Navigator.of(context).pop(true), // 削除実行
+                                child: const Text("Delete", style: TextStyle(color: Colors.white)),
+                              ),
+                            ],
+                          );
+                        },
+                      );
+                    },
+
+                    // 削除が確定した後の処理
+                    onDismissed: (direction) {
+                      _handleDeleteSession(item);
+                    },
+
+                    child: listTile,
                   );
                 },
               ),

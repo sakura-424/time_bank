@@ -37,9 +37,7 @@ class SkillService {
   // 古いデータを削除してから再計算する
   static Future<Map<String, dynamic>> syncDataFromHistory(Skill skill, List<HistoryItem> historyList) async {
     final prefs = await SharedPreferences.getInstance();
-
     // --- クリーンアップ処理 開始 ---
-
     final allKeys = prefs.getKeys(); // 保存されている全キーを取得
     final String prefix = "${skill.name}_";
 
@@ -48,26 +46,21 @@ class SkillService {
       if (key.startsWith(prefix)) {
         // キーの末尾（日付部分）を取り出す
         String suffix = key.substring(prefix.length);
-
         // 末尾が8桁の数字（yyyyMMdd）であれば、それはカレンダー用のデータなので削除する
         if (suffix.length == 8 && int.tryParse(suffix) != null) {
           await prefs.remove(key);
         }
       }
     }
-
     //  合計時間をゼロから再計算
     int totalSeconds = 0;
     // カレンダーデータもゼロから再計算
     Map<DateTime, int> newHeatmap = {};
-
     // 履歴を全件回して集計しなおす
     for (var item in historyList) {
       totalSeconds += item.durationSeconds;
-
       // 日付ごとの集計
       DateTime dateKey = DateTime(item.date.year, item.date.month, item.date.day);
-
       // 分単位で加算 (カレンダーライブラリの仕様)
       int minutes = (item.durationSeconds / 60).ceil();
       newHeatmap[dateKey] = (newHeatmap[dateKey] ?? 0) + minutes;
@@ -109,11 +102,9 @@ class SkillService {
   static Future<void> saveSession(Skill skill, int durationSeconds) async {
     final prefs = await SharedPreferences.getInstance();
     DateTime now = DateTime.now();
-
     // 合計時間の更新
     skill.totalTime += Duration(seconds: durationSeconds);
     await prefs.setInt(skill.name, skill.totalTime.inSeconds);
-
     // カレンダー用データの更新（日付ごとの秒数）
     String dateKey = "${skill.name}_${DateFormat('yyyyMMdd').format(now)}";
     int todaySeconds = prefs.getInt(dateKey) ?? 0;
