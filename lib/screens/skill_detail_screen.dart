@@ -100,13 +100,99 @@ class _SkillDetailScreenState extends State<SkillDetailScreen> {
   }
 
   void _openDetailDialog(int index) {
+    final item = historyList[index];
+    final color = AppUtils.getTagColor(item.tag);
+
     showDialog(
       context: context,
-      builder: (context) => HistoryDetailDialog(
-        item: historyList[index],
-        onEdit: () => _openEditDialog(index),
-        onDelete: () => _confirmDelete(index),
-      ),
+      builder: (context) {
+        return AlertDialog(
+          // 日付
+          title: Text(
+            DateFormat('yyyy/MM/dd HH:mm').format(item.date),
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // --- タグ表示エリア ---
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: color.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      item.tag,
+                      style: TextStyle(color: color, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  // ★ここにタグ編集ボタンを追加！
+                  IconButton(
+                    icon: const Icon(Icons.edit, size: 18, color: Colors.grey),
+                    tooltip: "Change Tag",
+                    onPressed: () {
+                      Navigator.pop(context); // 一旦詳細ダイアログを閉じて
+                      _showChangeTagDialog(index); // タグ変更ダイアログを開く
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              // --- 時間 ---
+              Row(
+                children: [
+                  const Icon(Icons.timer, color: Colors.grey, size: 20),
+                  const SizedBox(width: 8),
+                  Text(
+                    AppUtils.formatHistoryDuration(item.durationSeconds),
+                    style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+
+              // --- メモ ---
+              const Text("Memo:", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
+              const SizedBox(height: 8),
+              Text(
+                item.memo.isEmpty ? "No memo" : item.memo,
+                style: const TextStyle(fontSize: 16),
+              ),
+            ],
+          ),
+          actions: [
+            // メモ編集ボタン
+            TextButton.icon(
+              onPressed: () {
+                Navigator.pop(context);
+                _openEditDialog(index);
+              },
+              icon: const Icon(Icons.edit_note, size: 18),
+              label: const Text("Edit Memo"),
+              style: TextButton.styleFrom(foregroundColor: Colors.grey),
+            ),
+            // 削除ボタン
+            TextButton.icon(
+              onPressed: () {
+                Navigator.pop(context);
+                _confirmDelete(index);
+              },
+              icon: const Icon(Icons.delete, size: 18, color: Colors.red),
+              label: const Text("Delete", style: TextStyle(color: Colors.red)),
+            ),
+            // 閉じるボタン
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Close"),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -202,6 +288,81 @@ class _SkillDetailScreenState extends State<SkillDetailScreen> {
         _selectedItems.addAll(historyList); // リストの中身を全部セットに追加
       }
     });
+  }
+
+  // ★履歴のタグを変更して保存・再計算する
+  Future<void> _handleTagChange(int index, String newTag) async {
+    final oldItem = historyList[index];
+    // タグだけ書き換えた新しいアイテムを作る
+    final newItem = HistoryItem(
+      date: oldItem.date,
+      durationSeconds: oldItem.durationSeconds,
+      memo: oldItem.memo,
+      tag: newTag,
+    );
+
+    setState(() {
+      historyList[index] = newItem;
+    });
+
+    // 保存して全体を再計算（グラフの色などを更新）
+    await SkillService.saveHistory(widget.skill.name, historyList);
+    await _refreshAllData();
+  }
+
+  // ★タグ変更用の選択ダイアログ
+  void _showChangeTagDialog(int index) {
+    String currentTag = historyList[index].tag;
+    // もし現在のタグがリストになければ（削除されたタグなど）、先頭のものを選ぶ
+    if (!myTags.contains(currentTag)) {
+      currentTag = myTags.isNotEmpty ? myTags.first : "General";
+    }
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        // ダイアログ内で選択状態を変えるためにStatefulBuilderを使う
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text("Change Tag"),
+              content: DropdownButton<String>(
+                value: currentTag,
+                isExpanded: true,
+                items: myTags.map((String tag) {
+                  return DropdownMenuItem<String>(
+                    value: tag,
+                    child: Text(tag),
+                  );
+                }).toList(),
+                onChanged: (String? newValue) {
+                  if (newValue != null) {
+                    setDialogState(() {
+                      currentTag = newValue;
+                    });
+                  }
+                },
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text("Cancel"),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.black),
+                  onPressed: () {
+                    Navigator.pop(context);
+                    // タグ変更を実行
+                    _handleTagChange(index, currentTag);
+                  },
+                  child: const Text("Update", style: TextStyle(color: Colors.white)),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
 
