@@ -72,6 +72,11 @@ class _SkillPieChartState extends State<SkillPieChart> {
 
   // ★凡例を作るパーツ
   Widget _buildLegend(Map<String, int> tagTotals) {
+    // ★追加: 現在のテーマがダークモードかどうか判定
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    // ★追加: 文字色を動的に決める（ダークなら白、ライトなら黒）
+    final textColor = isDark ? Colors.white70 : Colors.black87;
     return Wrap(
       alignment: WrapAlignment.center, // 中央揃え
       spacing: 16, // 横の間隔
@@ -94,8 +99,8 @@ class _SkillPieChartState extends State<SkillPieChart> {
             // タグ名
             Text(
               tag,
-              style: const TextStyle(
-                color: Colors.black87,
+              style: TextStyle(
+                color: textColor,
                 fontWeight: FontWeight.w500,
                 fontSize: 14,
               ),

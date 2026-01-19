@@ -5,6 +5,7 @@ import '../services/skill_service.dart';
 import 'skill_detail_screen.dart';
 import '../services/backup_service.dart';
 import '../utils/app_utils.dart';
+import '../main.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -174,12 +175,34 @@ class _HomeScreenState extends State<HomeScreen> {
   void _showSettingsMenu() {
     showModalBottomSheet(
       context: context,
-      builder: (sheetContext) {
+      builder: (context) {
+        // 現在のモードがダークかどうか判定
+        final isDark = themeNotifier.value == ThemeMode.dark;
+
         return SafeArea(
           child: Wrap(
             children: [
               const Padding(
-                padding: EdgeInsets.all(16.0),
+                padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
+                child: Text("Settings", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
+              ),
+
+              // ★追加: ダークモード切り替えスイッチ
+              SwitchListTile(
+                title: const Text("Dark Mode"),
+                secondary: Icon(isDark ? Icons.dark_mode : Icons.light_mode),
+                value: isDark,
+                onChanged: (bool value) {
+                  // スイッチ切り替えでモードを変更
+                  themeNotifier.value = value ? ThemeMode.dark : ThemeMode.light;
+                  Navigator.pop(context); // メニューを閉じる
+                },
+              ),
+
+              const Divider(), // 区切り線
+
+              const Padding(
+                padding: EdgeInsets.fromLTRB(16, 8, 16, 8),
                 child: Text("Backup & Restore", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
               ),
               ListTile(
@@ -187,7 +210,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 title: const Text('Export Data'),
                 subtitle: const Text('Save backup file'),
                 onTap: () async {
-                  Navigator.pop(sheetContext);
+                  Navigator.pop(context);
                   await BackupService.exportData(context);
                 },
               ),
@@ -196,45 +219,29 @@ class _HomeScreenState extends State<HomeScreen> {
                 title: const Text('Import Data'),
                 subtitle: const Text('Restore from backup file'),
                 onTap: () async {
-                  Navigator.pop(sheetContext);
+                  Navigator.pop(context);
                   try {
-                    // 2. サービスを呼び出す (contextは渡さない)
                     bool success = await BackupService.importData();
-
-                    // 3. 画面がまだ存在しているかチェック (非同期処理のお作法)
                     if (!mounted) return;
-
                     if (success) {
-                      // 4. 成功したらリロードしてメッセージ表示
                       await _loadSkills();
                       showDialog(
                         context: context,
                         builder: (context) => AlertDialog(
                           title: const Text("Import Successful"),
                           content: const Text("Your data has been restored successfully."),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.pop(context),
-                              child: const Text("OK"),
-                            ),
-                          ],
+                          actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text("OK"))],
                         ),
                       );
                     }
                   } catch (e) {
                     if (!mounted) return;
-                    // エラー時のメッセージ表示
                     showDialog(
                       context: context,
                       builder: (context) => AlertDialog(
                         title: const Text("Import Failed"),
                         content: Text("An error occurred: $e"),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(context),
-                            child: const Text("OK"),
-                          ),
-                        ],
+                        actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text("OK"))],
                       ),
                     );
                   }
