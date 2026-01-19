@@ -39,6 +39,10 @@ dependencies:
   intl: ^0.20.2
   fl_chart: ^1.1.1
 
+  path_provider: ^2.1.2  # 保存場所を探す
+  share_plus: ^7.2.1     # ファイルを保存・共有する
+  file_picker: ^6.1.1    # ファイルを選択する
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

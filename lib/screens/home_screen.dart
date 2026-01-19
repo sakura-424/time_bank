@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/skill.dart';
 import '../services/skill_service.dart';
 import 'skill_detail_screen.dart';
+import '../services/backup_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -113,7 +114,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // ★追加: 削除確認ダイアログ
+  // 削除確認ダイアログ
   void _confirmDeleteSkill(Skill skill) {
     showDialog(
       context: context,
@@ -137,7 +138,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // ★追加: 長押し時のメニュー（ボトムシート）
+  // 長押し時のメニュー（ボトムシート）
   void _showSkillOptions(Skill skill) {
     showModalBottomSheet(
       context: context,
@@ -168,6 +169,83 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  // 設定メニューを表示
+  void _showSettingsMenu() {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) {
+        return SafeArea(
+          child: Wrap(
+            children: [
+              const Padding(
+                padding: EdgeInsets.all(16.0),
+                child: Text("Backup & Restore", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
+              ),
+              ListTile(
+                leading: const Icon(Icons.upload_file),
+                title: const Text('Export Data'),
+                subtitle: const Text('Save backup file'),
+                onTap: () async {
+                  Navigator.pop(context);
+                  await BackupService.exportData(context);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.download),
+                title: const Text('Import Data'),
+                subtitle: const Text('Restore from backup file'),
+                onTap: () async {
+                  Navigator.pop(context);
+                  try {
+                    // 2. サービスを呼び出す (contextは渡さない)
+                    bool success = await BackupService.importData();
+
+                    // 3. 画面がまだ存在しているかチェック (非同期処理のお作法)
+                    if (!mounted) return;
+
+                    if (success) {
+                      // 4. 成功したらリロードしてメッセージ表示
+                      await _loadSkills();
+                      showDialog(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          title: const Text("Import Successful"),
+                          content: const Text("Your data has been restored successfully."),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(context),
+                              child: const Text("OK"),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+                  } catch (e) {
+                    if (!mounted) return;
+                    // エラー時のメッセージ表示
+                    showDialog(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: const Text("Import Failed"),
+                        content: Text("An error occurred: $e"),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context),
+                            child: const Text("OK"),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -175,6 +253,12 @@ class _HomeScreenState extends State<HomeScreen> {
         backgroundColor: Colors.white,
         title: const Text("Time Bank", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
         elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings, color: Colors.black),
+            onPressed: _showSettingsMenu,
+          ),
+        ],
       ),
       body: skills.isEmpty
           ? const Center(child: Text("Add a skill to start tracking!", style: TextStyle(color: Colors.grey)))
