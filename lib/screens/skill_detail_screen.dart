@@ -9,7 +9,6 @@ import 'timer_screen.dart';
 
 import '../widgets/tag_management_dialog.dart';
 import '../widgets/edit_memo_dialog.dart';
-import '../widgets/history_detail_dialog.dart';
 import '../widgets/skill_pie_chart.dart';
 import '../widgets/skill_heatmap.dart';
 
@@ -365,16 +364,17 @@ class _SkillDetailScreenState extends State<SkillDetailScreen> {
     );
   }
 
-
-
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
     return Scaffold(
       // ★AppBarを動的に切り替える
       appBar: _isSelectionMode
           ? AppBar(
-              backgroundColor: Colors.white,
-              iconTheme: const IconThemeData(color: Colors.black),
+              backgroundColor: colorScheme.surface,
+              iconTheme: IconThemeData(color: colorScheme.onSurface),
               leading: IconButton(
                 icon: const Icon(Icons.close),
                 onPressed: () {
@@ -384,7 +384,10 @@ class _SkillDetailScreenState extends State<SkillDetailScreen> {
                   });
                 },
               ),
-              title: Text("${_selectedItems.length} selected", style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+              title: Text(
+                "${_selectedItems.length} selected",
+                style: TextStyle(color: colorScheme.onSurface, fontWeight: FontWeight.bold)
+              ),
               actions: [
                 // 全選択ボタン
                 IconButton(
@@ -406,11 +409,11 @@ class _SkillDetailScreenState extends State<SkillDetailScreen> {
               ],
             )
           : AppBar(
-              backgroundColor: Colors.white,
-              iconTheme: const IconThemeData(color: Colors.black),
-              title: Text(widget.skill.name, style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+              backgroundColor: theme.scaffoldBackgroundColor,
+              iconTheme: IconThemeData(color: colorScheme.onSurface),
+              title: Text(widget.skill.name, style: TextStyle(color: colorScheme.onSurface, fontWeight: FontWeight.bold)),
               actions: [
-                // ★ここを変更: 設定アイコン1つではなく、メニューボタン(PopupMenuButton)にする
+                // ★メニューボタン(PopupMenuButton)
                 PopupMenuButton<String>(
                   onSelected: (value) {
                     if (value == 'tags') {
@@ -454,7 +457,7 @@ class _SkillDetailScreenState extends State<SkillDetailScreen> {
             Center(
               child: Text(
                 "${widget.skill.totalTime.inHours}h ${widget.skill.totalTime.inMinutes.remainder(60).toString().padLeft(2, '0')}m ${widget.skill.totalTime.inSeconds.remainder(60).toString().padLeft(2, '0')}s",
-                style: const TextStyle(fontSize: 40, fontWeight: FontWeight.bold),
+                style: TextStyle(fontSize: 40, fontWeight: FontWeight.bold, color: colorScheme.onSurface,),
               ),
             ),
 
@@ -464,14 +467,14 @@ class _SkillDetailScreenState extends State<SkillDetailScreen> {
             const SizedBox(height: 30),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: const Text("Activity", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold))
+              child: Text("Activity", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: colorScheme.onSurface,))
             ),
             const SizedBox(height: 10),
 
             SkillHeatMap(datasets: heatmapDataset, historyList: historyList),
 
             const Divider(height: 40, thickness: 1),
-            Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: const Text("History", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold))),
+            Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: Text("History", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: colorScheme.onSurface))),
             const SizedBox(height: 10),
             if (historyList.isEmpty)
               const Center(child: Padding(padding: EdgeInsets.all(20), child: Text("No history yet.", style: TextStyle(color: Colors.grey))))
@@ -487,26 +490,26 @@ class _SkillDetailScreenState extends State<SkillDetailScreen> {
 
                   final listTile = ListTile(
                     selected: isSelected,
-                    selectedTileColor: Colors.grey.withOpacity(0.1),
+                    selectedTileColor: colorScheme.primary.withValues(alpha: 0.1),
                     leading: _isSelectionMode
                         ? Icon(
                             isSelected ? Icons.check_circle : Icons.radio_button_unchecked,
                             color: isSelected ? Colors.black : Colors.grey,
                           )
                         : Icon(Icons.check_circle, color: AppUtils.getTagColor(item.tag)),
-                    title: Text(DateFormat('yyyy/MM/dd HH:mm').format(item.date), style: const TextStyle(fontWeight: FontWeight.w500)),
+                    title: Text(DateFormat('yyyy/MM/dd HH:mm').format(item.date), style: TextStyle(fontWeight: FontWeight.w500, color: colorScheme.onSurface,)),
                     subtitle: Row(children: [
                         if (!_isSelectionMode) ...[
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                            decoration: BoxDecoration(color: AppUtils.getTagColor(item.tag).withOpacity(0.1), borderRadius: BorderRadius.circular(2)),
+                            decoration: BoxDecoration(color: AppUtils.getTagColor(item.tag).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(2)),
                             child: Text(item.tag, style: TextStyle(fontSize: 10, color: AppUtils.getTagColor(item.tag), fontWeight: FontWeight.bold)),
                           ),
                           const SizedBox(width: 8),
                         ],
                         if (item.memo.isNotEmpty) Expanded(child: Text(item.memo, maxLines: 1, overflow: TextOverflow.ellipsis)),
                     ]),
-                    trailing: Text(AppUtils.formatHistoryDuration(item.durationSeconds), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                    trailing: Text(AppUtils.formatHistoryDuration(item.durationSeconds), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: colorScheme.onSurface)),
                     onTap: () {
                       if (_isSelectionMode) {
                         _toggleSelection(item);
@@ -583,9 +586,9 @@ class _SkillDetailScreenState extends State<SkillDetailScreen> {
       floatingActionButton: _isSelectionMode
         ? null
         : FloatingActionButton.extended(
-            backgroundColor: Colors.black,
-            icon: const Icon(Icons.timer, color: Colors.white),
-            label: const Text("Start Timer", style: TextStyle(color: Colors.white)),
+            backgroundColor: colorScheme.primary,
+            icon: Icon(Icons.timer, color: colorScheme.surface),
+            label: Text("Start Timer", style: TextStyle(color: colorScheme.surface)),
             onPressed: () async {
               final result = await Navigator.push(
                 context,
